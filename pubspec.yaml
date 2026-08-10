@@ -17,7 +17,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 #version: 1.1.0+23
 #version: 1.0.23+25
-version: 1.0.3+8
+version: 1.1.4+16
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -90,6 +90,10 @@ dependencies:
   autocomplete_textfield: ^2.0.1
   syncfusion_flutter_xlsio: ^30.2.6
   syncfusion_flutter_gauges: ^30.2.6
+  # In-app PDF preview. Android's WebView cannot render a PDF, so account
+  # reports had to be pushed straight to the share sheet; this renders the
+  # bytes locally so the user can read a ledger before saving or sending it.
+  syncfusion_flutter_pdfviewer: ^30.2.6
   fl_chart: ^1.0.0
   #open_file: ^3.5.10
   flutter_plugin_android_lifecycle: ^2.0.29
@@ -118,10 +122,16 @@ dependency_overrides:
 
 #  flutter_launcher_icons: ^0.10.0
 
-flutter_icons:
+# Sources are built by tool/make_launcher_icon.dart from assets/images/logo_new.png.
+# The foreground must be transparent art with no padding of its own — the inset
+# below is what keeps the mark inside the adaptive-icon safe zone.
+flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/digitalerp_newlogo.png"
+  image_path: "assets/icons/app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icons/app_icon_foreground.png"
+  adaptive_icon_foreground_inset: 20
   remove_alpha_ios: true
 
 #flutter_icons:

@@ -89,6 +89,13 @@ class PartyLedgerController extends AppBaseController {
     }
   }
 
+  /// The saved file used to be `outstandingFile<millisecond>`, which told the
+  /// user nothing and collided every ~1000 exports. Name it after what it is.
+  String _reportFileName(String fromDate, String toDate) {
+    final party = (selectedPartyValue?.partyname ?? 'Party').trim();
+    return 'Party Transactions - $party ($fromDate to $toDate)';
+  }
+
   Future<void> onShare() async {
     if (transactionList.isEmpty) {
       ShowMessage.showSnackBar('Please check', 'No Transaction Found');
@@ -110,16 +117,14 @@ class PartyLedgerController extends AppBaseController {
       setBusy(true);
       var res = await api.partyLedgerPDF(body);
       if (res.status == 200) {
-        /// new way
-       await downloadAndSharePdfFile(
+        setBusy(false);
+        // Show the statement before doing anything with it — Download and
+        // Share live inside the preview screen now.
+        openPdfPreview(
           downloadUrl: res.data?.first.url ?? '',
-          pdfFileName: 'outstandingFile${DateTime.now().millisecond}',
+          pdfFileName: _reportFileName(fromDate, toDate),
+          title: 'Party Transactions',
         );
-       setBusy(false);
-        /// old way
-        /*
-        launchInBrowser(Uri.parse(res.data?.first.url ?? ''));
-         */
       } else {
         ShowMessage.showSnackBar('partyLedgerPDF Server res.status not 200', res.message.toString());
       }

@@ -20,7 +20,7 @@ class SplashView extends StatelessWidget {
             children: [
               //  Stacked layers logo 
               Image.asset(
-                'assets/images/Globenex_Logo.jpeg',
+                'assets/images/logo_new.png',
                 width: 100,
                 height: 100,
               ),
@@ -28,7 +28,7 @@ class SplashView extends StatelessWidget {
 
 
               const Text(
-                'Globenex Projects',
+                'Digital ERP',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,

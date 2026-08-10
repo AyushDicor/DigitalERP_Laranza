@@ -849,23 +849,23 @@ class _LeadManagementViewState extends State<LeadManagementView> {
             ? Center(
             child: CircularProgressIndicator(
                 color: _kPrimary, strokeWidth: 2.5))
-            : controller.leadList.isEmpty
-            ? _emptyState()
+            : controller.filteredLeadList.isEmpty
+            ? _emptyState(controller.isLeadFilterActive)
             : RefreshIndicator(
           color: _kPrimary,
           onRefresh: () async => controller.getLeadList(),
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            itemCount: controller.leadList.length,
+            itemCount: controller.filteredLeadList.length,
             itemBuilder: (ctx, i) =>
-                _LeadCard(item: controller.leadList[i]),
+                _LeadCard(item: controller.filteredLeadList[i]),
           ),
         ),
       ),
     );
   }
 
-  Widget _emptyState() {
+  Widget _emptyState([bool filterActive = false]) {
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
@@ -884,8 +884,11 @@ class _LeadManagementViewState extends State<LeadManagementView> {
                 fontWeight: FontWeight.w700,
                 color: _kTextPrimary)),
         const SizedBox(height: 6),
-        const Text('Tap + to add a new lead',
-            style: TextStyle(fontSize: 13, color: _kTextSecondary)),
+        Text(
+            filterActive
+                ? 'No leads match the current filter.'
+                : 'Tap + to add a new lead',
+            style: const TextStyle(fontSize: 13, color: _kTextSecondary)),
       ]),
     );
   }

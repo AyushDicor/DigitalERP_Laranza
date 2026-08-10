@@ -5,6 +5,7 @@ import 'package:digitalerp/app_routes/app_routes.dart';
 import 'package:digitalerp/controller/user_data_controller.dart';
 import 'package:digitalerp/response/add_to_cart_response.dart';
 import 'package:digitalerp/response/login_response.dart';
+import 'package:digitalerp/screen/ui/common/pdf_preview/pdf_preview_screen.dart';
 import 'package:digitalerp/screen/ui/home/home_controller.dart';
 import 'package:digitalerp/services/api_service/api.dart';
 import 'package:digitalerp/services/api_service/request_keys.dart';
@@ -354,6 +355,28 @@ Future<bool> checkIsAboveAndroid32() async {
   } else {
     return false;
   }
+}
+
+/// Opens a report PDF in the in-app viewer, where the user can read it and
+/// then choose Download or Share.
+///
+/// Prefer this over [downloadAndSharePdfFile], which force-opens the OS share
+/// sheet without ever showing the document. No storage permission is needed to
+/// preview — the bytes stay in memory until the user actually saves.
+void openPdfPreview({
+  required String downloadUrl,
+  required String pdfFileName,
+  String title = 'Preview',
+}) {
+  if (downloadUrl.trim().isEmpty) {
+    ShowMessage.showSnackBar('Report', 'No report file was returned');
+    return;
+  }
+  Get.to(() => PdfPreviewScreen(
+        url: downloadUrl,
+        fileName: pdfFileName,
+        title: title,
+      ));
 }
 
 Future<void> downloadAndSharePdfFile(

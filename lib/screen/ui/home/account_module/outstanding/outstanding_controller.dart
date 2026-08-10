@@ -184,21 +184,15 @@ class OutstandingController extends AppBaseController {
         RequestKeys.toDate: toDate,
       };
       var res = await api.partyLedgerPDF(body);
-      print('Dio Response: ${res.toString()}');
 
       if (res.status == 200) {
-        print('PDF URL: ${res.data?.first.url}');
-
-        /// new way
-        downloadAndSharePdfFile(
+        // Preview first; Download and Share are offered inside the viewer.
+        final party = (selectedPartyValue?.partyname ?? 'Party').trim();
+        openPdfPreview(
           downloadUrl: res.data?.first.url ?? '',
-          pdfFileName: 'outstandingFile${DateTime.now().millisecond}',
+          pdfFileName: 'Party Ledger - $party ($fromDate to $toDate)',
+          title: 'Party Ledger',
         );
-        // print("URl=> ${DateTime.now().millisecond}");
-
-        /// old way
-
-        // launchInBrowser(Uri.parse(res.data?.first.url ?? ''));
       } else {
         ShowMessage.showSnackBar(
             'partyLedgerPDF Server res.status not 200', res.message.toString());

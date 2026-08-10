@@ -1,4 +1,4 @@
-package com.globenex.erp
+package com.dicorerp.app
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine

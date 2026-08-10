@@ -210,7 +210,7 @@
     </queries>
 
     <application
-        android:label="Globenex"
+        android:label="Digital ERP"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"

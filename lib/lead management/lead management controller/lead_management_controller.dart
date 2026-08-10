@@ -293,10 +293,17 @@
 // }
 
 import 'dart:convert';
+import 'dart:developer';
+
 import 'package:digitalerp/model/getleadentry_response_model.dart';
+import 'package:digitalerp/model/lead_sources_response_model.dart';
 import 'package:digitalerp/repo/lead_management_repo.dart';
+import 'package:digitalerp/response/area_data_response.dart';
+import 'package:digitalerp/response/city_data_response.dart';
+import 'package:digitalerp/response/state_data_response.dart';
 import 'package:digitalerp/screen/base/base_controller.dart';
 import 'package:digitalerp/screen/ui/home/home_controller.dart';
+import 'package:digitalerp/services/api_service/request_keys.dart';
 import 'package:digitalerp/utils/app_constant.dart';
 import 'package:digitalerp/utils/show_message.dart';
 import 'package:flutter/cupertino.dart';
@@ -308,10 +315,230 @@ class LeadManagementController extends AppBaseController {
   //  Lead list
   List<GetleadentryList> leadList = [];
 
+  // ─────────────────────────────────────────────────────────────────────
+  //  Lead entry dropdowns: State → City → Area (cascading) and Source.
+  //  Previously these were `_DropdownRow` widgets in the view — a grey box
+  //  with a chevron and no data, no state and no tap handler.
+  // ─────────────────────────────────────────────────────────────────────
+  List<StateDataList> stateList = [];
+  List<CityDataList> cityList = [];
+  List<AreaDataList> areaList = [];
+  List<LeadSourcesData> sourceList = [];
+
+  StateDataList? selectedState;
+  CityDataList? selectedCity;
+  AreaDataList? selectedArea;
+  LeadSourcesData? selectedSource;
+
+  bool isStateLoading = false;
+  bool isCityLoading = false;
+  bool isAreaLoading = false;
+
   @override
   void onInit() {
     super.onInit();
     getLeadList(); // ✅ FIX: fetch leads on init so the list is never null/empty
+    getStateList();
+    getSourceList();
+  }
+
+  //  State / City / Area
+
+  Future<void> getStateList() async {
+    isStateLoading = true;
+    update();
+    try {
+      Map<String, String> body = {
+        RequestKeys.compId: homeController.currentUserData?.compId.toString() ?? '',
+      };
+      var res = await api.getStateData(body);
+      if (res.status == 200) stateList = res.data ?? [];
+    } catch (e) {
+      log('getStateList error: $e');
+    } finally {
+      isStateLoading = false;
+      update();
+    }
+  }
+
+  Future<void> onStateChanged(StateDataList? value) async {
+    selectedState = value;
+    // Changing State invalidates the City and Area beneath it.
+    selectedCity = null;
+    selectedArea = null;
+    cityList = [];
+    areaList = [];
+    update();
+    if (value?.stateid == null) return;
+    await getCityList(value!.stateid.toString());
+  }
+
+  Future<void> getCityList(String stateId) async {
+    isCityLoading = true;
+    update();
+    try {
+      Map<String, String> body = {
+        RequestKeys.compId: homeController.currentUserData?.compId.toString() ?? '',
+        RequestKeys.stateId: stateId,
+      };
+      var res = await api.getCityData(body);
+      // No `.first` auto-select here — that pattern crashes on a state with no
+      // cities and silently applies a value the user never chose.
+      if (res.status == 200) cityList = res.data ?? [];
+    } catch (e) {
+      log('getCityList error: $e');
+    } finally {
+      isCityLoading = false;
+      update();
+    }
+  }
+
+  Future<void> onCityChanged(CityDataList? value) async {
+    selectedCity = value;
+    selectedArea = null;
+    areaList = [];
+    update();
+    if (value?.cityid == null) return;
+    await getAreaList(value!.cityid.toString());
+  }
+
+  Future<void> getAreaList(String cityId) async {
+    isAreaLoading = true;
+    update();
+    try {
+      Map<String, String> body = {
+        RequestKeys.compId: homeController.currentUserData?.compId.toString() ?? '',
+        RequestKeys.cityId: cityId,
+      };
+      var res = await api.getAreaData(body);
+      if (res.status == 200) areaList = res.data ?? [];
+    } catch (e) {
+      log('getAreaList error: $e');
+    } finally {
+      isAreaLoading = false;
+      update();
+    }
+  }
+
+  void onAreaChanged(AreaDataList? value) {
+    selectedArea = value;
+    update();
+  }
+
+  //  Source
+
+  Future<void> getSourceList() async {
+    try {
+      final requestData = {
+        "compid": homeController.currentUserData?.compId.toString() ?? '',
+      };
+      final result = await LeadManagementRepo.leadSourcesMethod(requestData);
+      if (result.statusCode == 200 && result.data != null) {
+        sourceList = LeadSourcesResponseModel.fromJson(result.data).data ?? [];
+      }
+    } catch (e) {
+      log('getSourceList error: $e');
+    }
+    update();
+  }
+
+  void onSourceChanged(LeadSourcesData? value) {
+    selectedSource = value;
+    update();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //  Lead LIST filter (client-side).
+  //
+  //  getleadentry/getleadentry accepts no filter parameters and returns only
+  //  6 fields per lead — LeadEntryId, LeadName, CompanyName, MobileNo,
+  //  LeadDate, Ageing. So those are the only things that can be filtered on.
+  //  "Lead Type", "Status" and "Handler" are not in the list payload at all,
+  //  which is why those dropdowns could never have worked.
+  // ─────────────────────────────────────────────────────────────────────
+  String? filterCompany;
+  String? filterContact;
+  DateTime? filterFromDate;
+  DateTime? filterToDate;
+
+  /// Distinct company names present in the loaded leads.
+  List<String> get filterCompanyOptions {
+    final s = leadList
+        .map((e) => e.companyName.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return s;
+  }
+
+  /// Distinct contact names present in the loaded leads.
+  List<String> get filterContactOptions {
+    final s = leadList
+        .map((e) => e.leadName.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return s;
+  }
+
+  bool get isLeadFilterActive =>
+      filterCompany != null ||
+      filterContact != null ||
+      filterFromDate != null ||
+      filterToDate != null;
+
+  /// LeadDate arrives as dd-MM-yyyy.
+  DateTime? _parseLeadDate(String raw) {
+    final p = raw.split('-');
+    if (p.length != 3) return null;
+    return DateTime.tryParse('${p[2]}-${p[1]}-${p[0]}');
+  }
+
+  List<GetleadentryList> get filteredLeadList {
+    return leadList.where((e) {
+      if (filterCompany != null && e.companyName.trim() != filterCompany) {
+        return false;
+      }
+      if (filterContact != null && e.leadName.trim() != filterContact) {
+        return false;
+      }
+      if (filterFromDate != null || filterToDate != null) {
+        final d = _parseLeadDate(e.leadDate);
+        if (d == null) return false;
+        if (filterFromDate != null && d.isBefore(filterFromDate!)) return false;
+        if (filterToDate != null) {
+          final end = DateTime(filterToDate!.year, filterToDate!.month,
+              filterToDate!.day, 23, 59, 59);
+          if (d.isAfter(end)) return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
+  void setLeadFilterCompany(String? v) { filterCompany = v; update(); }
+  void setLeadFilterContact(String? v) { filterContact = v; update(); }
+  void setLeadFilterFromDate(DateTime? v) { filterFromDate = v; update(); }
+  void setLeadFilterToDate(DateTime? v) { filterToDate = v; update(); }
+
+  void resetLeadFilter() {
+    filterCompany = null;
+    filterContact = null;
+    filterFromDate = null;
+    filterToDate = null;
+    update();
+  }
+
+  void clearLeadEntryDropdowns() {
+    selectedState = null;
+    selectedCity = null;
+    selectedArea = null;
+    selectedSource = null;
+    cityList = [];
+    areaList = [];
+    update();
   }
 
   /// Fetch the lead list from the existing getleadentry endpoint.
@@ -493,22 +720,58 @@ class LeadManagementController extends AppBaseController {
     return true;
   }
 
-  //  API calls 
+  //  API calls
+  /// Save a new lead.
+  ///
+  /// This used to post an EMPTY body to `addCompanyJson` with a
+  /// "TODO: populate body with actual field values" comment — so nothing the
+  /// user typed was ever saved. It now posts the real form values to
+  /// `leadentry/saveleadentry`, the same endpoint the lead edit screen uses.
   void addleadApi() async {
     unfocus();
     setBusy(true);
     if (_isLeadValidate()) {
       try {
-        // TODO: populate body with actual field values
-        final Map<String, String> body = {};
-        final res = await api.addCompanyJson(json.encode(body));
-        if (res.status == 200) {
+        final String leadDate = (selectDate == 'Lead Date') ? '' : selectDate;
+        final Map<String, dynamic> body = {
+          "leadName": contactPersonController.text.trim(),
+          "companyName": companyNameController.text.trim(),
+          "ownerName": ownerNameController.text.trim(),
+          "mobileNo": mobileNumberController.text.trim(),
+          "alternateMobile": alternateNumberController.text.trim(),
+          "phoneNo": phoneNumberController.text.trim(),
+          "email": emailController.text.trim(),
+          "website": websiteController.text.trim(),
+          "address": companyAddressController.text.trim(),
+          "businessNature": businessNatureController.text.trim(),
+          "requirement": requirementController.text.trim(),
+          "leadDate": leadDate,
+          "sourceid": selectedSource?.sourceid ?? 0,
+          "source": selectedSource?.sourcename ?? '',
+          // NOTE: the lead record has no state/city/area columns yet — see
+          // Leadedit/getlead, which returns only a free-text `address`. These
+          // are sent so the module is ready the moment the backend adds them.
+          "stateid": selectedState?.stateid ?? 0,
+          "statename": selectedState?.statename ?? '',
+          "cityid": selectedCity?.cityid ?? 0,
+          "cityname": selectedCity?.cityname ?? '',
+          "areaid": selectedArea?.areaid ?? 0,
+          "areaname": selectedArea?.areaname ?? '',
+          "compId": homeController.currentUserData?.compId,
+          "branchId": homeController.currentUserData?.branchId,
+          "userId": homeController.currentUserData?.userid,
+          "yearId": homeController.currentUserData?.yearId,
+        };
+        log('addleadApi body => ${json.encode(body)}');
+        final res = await LeadManagementRepo.saveLeadEntryMethod(body);
+        if (res.statusCode == 200 && (res.data?["success"] == true)) {
           backTap();
           // ✅ Refresh the list after a successful add
           getLeadList();
-          ShowMessage.showSnackBar('Success', res.message.toString());
+          ShowMessage.showSnackBar('Success', res.data?["message"]?.toString() ?? 'Lead saved');
         } else {
-          ShowMessage.showSnackBar('Error', res.message.toString());
+          ShowMessage.showSnackBar(
+              'Could not save lead', res.data?["message"]?.toString() ?? res.message.toString());
         }
       } catch (e) {
         ShowMessage.showSnackBar('Error', '$e');

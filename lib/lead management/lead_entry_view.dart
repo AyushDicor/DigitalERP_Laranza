@@ -980,9 +980,14 @@
 //
 
 import 'package:digitalerp/lead%20management/lead%20management%20controller/lead_management_controller.dart';
+import 'package:digitalerp/model/lead_sources_response_model.dart';
+import 'package:digitalerp/response/area_data_response.dart';
+import 'package:digitalerp/response/city_data_response.dart';
+import 'package:digitalerp/response/state_data_response.dart';
 import 'package:digitalerp/screen/base/base_controller.dart';
 import 'package:digitalerp/utils/app_constant_new.dart';
 import 'package:digitalerp/utils/date_widget.dart';
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -1133,6 +1138,100 @@ class _LeadTextField extends StatelessWidget {
 }
 
 //  Plain dropdown row 
+/// A real, working dropdown for the lead form.
+///
+/// [_DropdownRow] below is the original placeholder — a grey box with a chevron
+/// and no items, no selection and no tap handler. This one is backed by data.
+class _LeadDropdown<T> extends StatelessWidget {
+  final String label;
+  final T? value;
+  final List<T> items;
+  final String Function(T) itemLabel;
+  final ValueChanged<T?> onChanged;
+  final bool isLoading;
+
+  /// Message shown when [items] is empty — usually "pick the parent first".
+  final String emptyHint;
+
+  const _LeadDropdown({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.itemLabel,
+    required this.onChanged,
+    this.isLoading = false,
+    this.emptyHint = '',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool disabled = isLoading || items.isEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(
+          color: disabled ? _kBg : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _kBorder),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton2<T>(
+            isExpanded: true,
+            // Guard against the "exactly one item with value" assertion: if a
+            // stale selection is no longer in the list, fall back to null.
+            value: items.contains(value) ? value : null,
+            hint: Row(
+              children: [
+                if (isLoading) ...[
+                  const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Text(
+                    isLoading
+                        ? 'Loading $label…'
+                        : (items.isEmpty && emptyHint.isNotEmpty
+                            ? emptyHint
+                            : 'Select $label'),
+                    style: const TextStyle(fontSize: 14, color: _kTextHint),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            items: items
+                .map((e) => DropdownMenuItem<T>(
+                      value: e,
+                      child: Text(
+                        itemLabel(e),
+                        style: const TextStyle(
+                            fontSize: 14, color: _kTextPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ))
+                .toList(),
+            onChanged: disabled ? null : onChanged,
+            icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                color: _kTextSecondary, size: 20),
+            buttonHeight: 48,
+            buttonPadding: EdgeInsets.zero,
+            dropdownMaxHeight: 320,
+            dropdownDecoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DropdownRow extends StatelessWidget {
   final String label;
   const _DropdownRow(this.label);
@@ -1392,7 +1491,43 @@ class _LeadEntryViewState extends State<LeadEntryView> {
                     focusNode: controller.companyAddresFocus,
                     maxLines: 2,
                   ),
-                  _DropdownRow('Source'),
+
+                  //  State → City → Area (cascading)
+                  _LeadDropdown<StateDataList>(
+                    label: 'State',
+                    value: controller.selectedState,
+                    items: controller.stateList,
+                    itemLabel: (e) => e.statename ?? '',
+                    isLoading: controller.isStateLoading,
+                    onChanged: controller.onStateChanged,
+                  ),
+                  _LeadDropdown<CityDataList>(
+                    label: 'City',
+                    value: controller.selectedCity,
+                    items: controller.cityList,
+                    itemLabel: (e) => e.cityname ?? '',
+                    isLoading: controller.isCityLoading,
+                    emptyHint: 'Select a State first',
+                    onChanged: controller.onCityChanged,
+                  ),
+                  _LeadDropdown<AreaDataList>(
+                    label: 'Area',
+                    value: controller.selectedArea,
+                    items: controller.areaList,
+                    itemLabel: (e) => e.areaname ?? '',
+                    isLoading: controller.isAreaLoading,
+                    emptyHint: 'Select a City first',
+                    onChanged: controller.onAreaChanged,
+                  ),
+
+                  // Source is a real dropdown now — leadsource/leadsourcedropdown
+                  _LeadDropdown<LeadSourcesData>(
+                    label: 'Source',
+                    value: controller.selectedSource,
+                    items: controller.sourceList,
+                    itemLabel: (e) => e.sourcename ?? '',
+                    onChanged: controller.onSourceChanged,
+                  ),
                   _LeadTextField(
                     label: 'Business Nature',
                     controller: controller.businessNatureController,
@@ -1484,6 +1619,7 @@ class _LeadEntryViewState extends State<LeadEntryView> {
                         controller.phoneNumberController.clear();
                         controller.businessNatureController.clear();
                         controller.clearSelectedDate();
+                        controller.clearLeadEntryDropdowns();
                       },
                       style: _ButtonStyle.danger,
                     ),

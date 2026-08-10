@@ -24,12 +24,12 @@ val keystorePropertiesFile = rootProject.file("key.properties").also { f ->
 }
 
 android {
-    namespace = "com.globenex.erp"
+    namespace = "com.dicorerp.app"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     defaultConfig {
-        applicationId = "com.globenex.erp"
+        applicationId = "com.dicorerp.app"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutterVersionCode          // <-- use variables
