@@ -1338,6 +1338,7 @@ class _HomeViewNewState extends State<HomeViewNew> with WidgetsBindingObserver {
       2754: AppRoutes.mrnScreen,
       2701: AppRoutes.reimbursement,
       2586: AppRoutes.paymentRequestListScreen,
+      2700: AppRoutes.ticketListScreen,
     };
     return menuId != null ? directRoutes[menuId] : null;
   }

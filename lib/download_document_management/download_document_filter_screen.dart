@@ -192,9 +192,6 @@ class DownloadDocumentFilterScreen extends StatelessWidget {
   Widget _datePicker(
       DownloadDocumentController controller, BuildContext context,
       {required bool isFirst}) {
-    final int currentYear = int.parse(
-        controller.homeController.currentUserData?.yearId?.split('-').first ??
-            '2024');
     final String date =
         isFirst ? controller.firstDownloadDate : controller.lastDownloadDate;
     final DateTime initDate = date != AppString.dateTimeEmpty
@@ -207,7 +204,7 @@ class DownloadDocumentFilterScreen extends StatelessWidget {
         final picked = await showDatePicker(
           context: context,
           initialDate: initDate,
-          firstDate: DateTime(currentYear),
+          firstDate: DateTime(2020),
           lastDate: DateTime.now(),
           builder: (ctx, child) => Theme(
             data: Theme.of(ctx).copyWith(

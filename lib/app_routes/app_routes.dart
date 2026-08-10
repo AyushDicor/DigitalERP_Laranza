@@ -25,6 +25,7 @@ class AppRoutes {
   static const collection = '/collection';
   static const expense = '/expense';
   static const reimbursement =  '/reimbursement';
+  static const ticketListScreen = '/TicketListScreen';
   static const outstanding = '/outstanding';
   static const contra = '/contra';
   static const journalEntry = '/journal-entry';

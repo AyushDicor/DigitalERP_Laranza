@@ -617,6 +617,11 @@ Widget _sectionLabel(String label) => Text(label,
     style: const TextStyle(
         fontSize: 14, fontWeight: FontWeight.w600, color: _kTextPrimary));
 
+/// Earliest date the document search may look back to. Matches the floor the
+/// rest of the app's date pickers use, so a user is not limited to whichever
+/// financial year they happen to be logged into.
+final DateTime _kDocumentSearchFirstDate = DateTime(2020);
+
 
 class DownloadDocumentsView extends StatelessWidget {
   DownloadDocumentsView({Key? key}) : super(key: key);
@@ -840,9 +845,6 @@ class DownloadDocumentsView extends StatelessWidget {
   Widget _datePicker(DownloadDocumentController controller,
       BuildContext context,
       {required bool isFirst}) {
-    final int currentYear = int.parse(
-        controller.homeController.currentUserData?.yearId?.split('-').first ??
-            '2024');
     final String date =
     isFirst ? controller.firstDownloadDate : controller.lastDownloadDate;
     final DateTime initDate = date != AppString.dateTimeEmpty
@@ -855,7 +857,7 @@ class DownloadDocumentsView extends StatelessWidget {
         final picked = await showDatePicker(
           context: context,
           initialDate: initDate,
-          firstDate: DateTime(currentYear),
+          firstDate: _kDocumentSearchFirstDate,
           lastDate: DateTime.now(),
           builder: (ctx, child) => Theme(
             data: Theme.of(ctx).copyWith(

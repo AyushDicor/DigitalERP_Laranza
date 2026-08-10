@@ -424,6 +424,7 @@ class HomeViewNewController extends AppBaseController {
     if (menuId == 2755) return AppRoutes.materialReceiptScreen;
     if (menuId == 2769) return AppRoutes.indentList;
     if (menuId == 2770) return AppRoutes.issueItemList;
+    if (menuId == 2700) return AppRoutes.ticketListScreen;
     return AppRoutes.homeNew;
   }
 }
