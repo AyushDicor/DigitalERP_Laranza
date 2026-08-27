@@ -22,6 +22,9 @@ class SharedPre {
   static const selectedCustomer = 'selectedCustomer';
   static const selectedCustomer2 = 'selectedCustomer2';
   static const  offlineCartList = 'offlineCartList';
+  /// Company chosen on the Quick Order screen, handed to checkout so Your
+  /// Order can pre-fill Select Company. The server cart is not party-scoped.
+  static const quickOrderParty = 'quickOrderParty';
   static const  unApprovalCount = 'unApprovalCount';
   static const String currentBranchId = 'currentBranchId';        // ✅ Add this
   static const String currentBranchName = 'currentBranchName';

@@ -41,6 +41,7 @@ import 'package:digitalerp/response/delete_visit_data_response.dart';
 import 'package:digitalerp/response/distance_details_response.dart';
 import 'package:digitalerp/response/download_salary_sleep_res.dart';
 import 'package:digitalerp/response/dsr_pdf_response.dart';
+import 'package:digitalerp/response/employee_profile_response.dart';
 import 'package:digitalerp/response/executive_list_response.dart';
 import 'package:digitalerp/response/executive_list_with_lat_long_response.dart';
 import 'package:digitalerp/response/executive_order_list_response.dart';
@@ -243,6 +244,81 @@ class Api {
         message: 'No Internet',
       );
     }
+  }
+
+  /// Full ERP Employee Master record for the logged-in user.
+  Future<EmployeeProfileResponse> getEmployeeProfile(var body) async {
+    if (!await _hasNetwork()) {
+      return EmployeeProfileResponse(status: 500, message: 'No Internet');
+    }
+    try {
+      String res = await _apiClient.postMethodJson(
+          method: _apiMethods.employeeProfile,
+          body: body,
+          header: {'Content-Type': 'application/json'});
+      if (res.isEmpty) {
+        return EmployeeProfileResponse(
+            status: 500, message: AppString.somethingTxt);
+      }
+      return employeeProfileResponseFromJson(res);
+    } catch (e) {
+      if (kDebugMode) {
+        print(e);
+      }
+      return EmployeeProfileResponse(status: 500, message: e.toString());
+    }
+  }
+
+  /// Saves one section of the Employee Master (general, family, bank, ...).
+  Future<EmployeeProfileResponse> saveEmployeeProfileSection(var body) async {
+    if (!await _hasNetwork()) {
+      return EmployeeProfileResponse(status: 500, message: 'No Internet');
+    }
+    try {
+      String res = await _apiClient.postMethodJson(
+          method: _apiMethods.employeeProfileSave,
+          body: body,
+          header: {'Content-Type': 'application/json'});
+      if (res.isEmpty) {
+        return EmployeeProfileResponse(
+            status: 500, message: AppString.somethingTxt);
+      }
+      return employeeProfileResponseFromJson(res);
+    } catch (e) {
+      if (kDebugMode) {
+        print(e);
+      }
+      return EmployeeProfileResponse(status: 500, message: e.toString());
+    }
+  }
+
+  /// Dropdown lists used by the profile form (departments, states, cities, ...).
+  Future<ProfileLookupsResponse> getEmployeeProfileLookups(var body) async {
+    if (!await _hasNetwork()) {
+      return ProfileLookupsResponse(status: 500, message: 'No Internet');
+    }
+    try {
+      String res = await _apiClient.postMethodJson(
+          method: _apiMethods.employeeProfileLookups,
+          body: body,
+          header: {'Content-Type': 'application/json'});
+      if (res.isEmpty) {
+        return ProfileLookupsResponse(
+            status: 500, message: AppString.somethingTxt);
+      }
+      return profileLookupsResponseFromJson(res);
+    } catch (e) {
+      if (kDebugMode) {
+        print(e);
+      }
+      return ProfileLookupsResponse(status: 500, message: e.toString());
+    }
+  }
+
+  Future<bool> _hasNetwork() async {
+    final results = await connectivity.checkConnectivity();
+    return results.contains(ConnectivityResult.wifi) ||
+        results.contains(ConnectivityResult.mobile);
   }
 
   Future<OtpVerifyResponse> otpVerify(Map<String, String> body) async {

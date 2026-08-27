@@ -1,94 +1,122 @@
 import 'package:digitalerp/app_routes/app_routes.dart';
-import 'package:digitalerp/utils/app_assets.dart';
-import 'package:digitalerp/utils/app_bottom_button.dart';
-import 'package:digitalerp/utils/app_constant.dart';
-import 'package:digitalerp/screen/base/base_controller.dart';
+import 'package:digitalerp/utils/app_constant_new.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-class OrderPlacedView extends StatefulWidget {
-  const OrderPlacedView({Key? key}) : super(key: key);
+/// Order confirmation screen.
+///
+/// Rebuilt to match the rest of the order flow: a plain white scaffold and a
+/// single success mark, instead of the full-bleed background image plus three
+/// stacked artwork assets sized off `Get.height` fractions, which overflowed
+/// on short screens.
+class OrderPlacedView extends StatelessWidget {
+  const OrderPlacedView({super.key});
 
-  @override
-  State<OrderPlacedView> createState() => _OrderPlacedViewState();
-}
-
-class _OrderPlacedViewState extends State<OrderPlacedView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: false,
-      body: Center(
-        child: Container(
-          decoration: const BoxDecoration(
-              image: DecorationImage(
-                  image: AssetImage(AppAssets.successBg), fit: BoxFit.fill)),
-          child: SafeArea(
-            child: Stack(
-              children: [
-                SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.only(top: 10),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Success',
-                        style: const TextStyle()
-                            .bold
-                            .copyWith(fontSize: 20, color: Colors.white),
+                      Container(
+                        height: 96,
+                        width: 96,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: newGreenColor.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          size: 52,
+                          color: newGreenColor,
+                        ),
                       ),
-                      SizedBox(height: Get.height * .05),
-                      Image.asset(
-                        AppAssets.appLogo,
-                        height: Get.height * .12,
-                        fit: BoxFit.fill,
+                      const SizedBox(height: 28),
+                      const Text(
+                        'Order Placed',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: newTextPrimary,
+                        ),
                       ),
-                      SizedBox(height: Get.height * .04),
-                      Image.asset(
-                        AppAssets.successCenterImage,
-                        height: Get.height * .35,
-                        width: Get.width,
-                        fit: BoxFit.contain,
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Your order has been placed successfully and is now '
+                        'waiting for approval.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          height: 1.5,
+                          color: newTextSecondary,
+                        ),
                       ),
-                      SizedBox(height: Get.height * .04),
-                      Image.asset(
-                        AppAssets.successImage,
-                        fit: BoxFit.fill,
-                      ),
-                      SizedBox(height: Get.height * .02),
-                      Text(
-                        'Congratulations',
-                        style: const TextStyle()
-                            .bold
-                            .copyWith(fontSize: 20, color: green5Color),
-                      ),
-                      SizedBox(height: Get.height * .02),
-                      Text(
-                        'Your Order Placed Successfully',
-                        style: const TextStyle().medium,
-                      ),
-                      const SizedBox(height: 60)
                     ],
                   ),
                 ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: AppBottomButton(
-                    onPressed: () => tapOnBottomButton(),
-                    name: 'Go To Orders' /*'More Logo. Let\'s do again'*/,
-                  ),
-                )
-              ],
+              ),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () =>
+                          Get.offAndToNamed(AppRoutes.home, arguments: 4),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: newBlueColor,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text(
+                        'Go To Orders',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: TextButton(
+                      onPressed: () => Get.offAllNamed(AppRoutes.home),
+                      style: TextButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text(
+                        'Back to Home',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: newTextSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
-  }
-
-  tapOnBottomButton() {
-    Get.offAndToNamed(AppRoutes.home, arguments: 4);
   }
 }

@@ -22,7 +22,14 @@ class CartController extends AppBaseController {
   List<GetCartListData> cartList = [];
   List<GetCartListData> cartDeletedListItem = [];
   int? flag;
-  late final  list ;
+  bool isClearingCart = false;
+
+  /// Local mirror of the cart used only by the old product screens to badge
+  /// items as "in cart". It must always be a real list: this was previously a
+  /// `late final` assigned only when the stored value was non-empty, so any
+  /// cart built through a screen that does not write that key left it
+  /// uninitialized and made [tapOnDelete] throw before it reached the API.
+  List<OfflineCart> list = [];
 
   init() async {
     // TODO: implement onInit
@@ -48,21 +55,96 @@ class CartController extends AppBaseController {
   }
 
   void tapOnDelete(int index) async {
+    if (index < 0 || index >= cartList.length) return;
     var item = cartList[index];
-    list.removeWhere((element)
-      => element.itemId == cartList[index].productid);
-    await SharedPre.setValue(
-        SharedPre.offlineCartList, json.encode(list));
-    //cartDeletedListItem.add(item); /// using for manage product list cart color on back tap
-    bool deleted = await removeFromCartAPI(itemId: item.id.toString());
-    if (deleted) {
-      cartList.removeAt(index);
-      if(cartList.isEmpty){
-        await SharedPre.clear(SharedPre.offlineCartList);
+
+    /// Deleting must not depend on the local mirror — keeping it in sync is
+    /// best-effort only, so a failure here can never stop the server call.
+    try {
+      list.removeWhere((element) => element.itemId == item.productid);
+      await SharedPre.setValue(
+          SharedPre.offlineCartList, json.encode(list));
+    } catch (_) {}
+
+    try {
+      bool deleted = await removeFromCartAPI(itemId: item.id.toString());
+      if (deleted) {
+        cartList.removeAt(index);
+        if (cartList.isEmpty) {
+          await SharedPre.clear(SharedPre.offlineCartList);
+        }
+        homeController.itemInCart.value =
+            homeController.itemInCart.value - 1 < 0
+                ? 0
+                : homeController.itemInCart.value - 1;
+        getDetails();
+        update();
       }
-      homeController.itemInCart.value = homeController.itemInCart.value-1 ;
-      getDetails();
-      update();
+    } catch (e) {
+      /// Previously this whole method was a fire-and-forget `async` with no
+      /// guard, so any throw disappeared and the row simply never went away.
+      ShowMessage.showSnackBar('', 'Could not remove item: $e');
+    }
+  }
+
+  /// Empties the whole cart. The server cart is per user and persists across
+  /// sessions until an order is placed, so stale items from an earlier session
+  /// otherwise have to be deleted one row at a time. Always confirmed first —
+  /// removals cannot be undone.
+  Future<void> tapOnClearAll() async {
+    if (cartList.isEmpty || isClearingCart) return;
+
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Empty cart?',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'This removes all ${cartList.length} item(s) from your cart. '
+          'It cannot be undone.',
+          style: const TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back<bool>(result: false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Get.back<bool>(result: true),
+            child: const Text('Empty cart',
+                style: TextStyle(color: Color(0xFFEF4444))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    isClearingCart = true;
+    update();
+
+    /// The API removes one row per call, so this loops over a snapshot.
+    final rows = List<GetCartListData>.from(cartList);
+    int failed = 0;
+    for (final row in rows) {
+      try {
+        final ok = await removeFromCartAPI(itemId: row.id.toString());
+        if (!ok) failed++;
+      } catch (_) {
+        failed++;
+      }
+    }
+
+    await SharedPre.clear(SharedPre.offlineCartList);
+    list = [];
+    isClearingCart = false;
+    await getDetails();
+    homeController.itemInCart.value = cartList.length;
+    update();
+
+    if (failed > 0) {
+      ShowMessage.showSnackBar('', '$failed item(s) could not be removed');
     }
   }
 
@@ -75,11 +157,20 @@ class CartController extends AppBaseController {
     }
   }
 
-  void getOfflineList() async{
-    var list1 = await SharedPre.getStringValue(SharedPre.offlineCartList);
-    if(list1.isNotEmpty) {
-      var obj1 = json.decode(list1);
-      list = obj1.map((model) => OfflineCart.fromJson(model)).toList();
+  Future<void> getOfflineList() async {
+    final raw = await SharedPre.getStringValue(SharedPre.offlineCartList);
+    if (raw.isEmpty) {
+      list = [];
+      return;
+    }
+    try {
+      final decoded = json.decode(raw) as List;
+      list = decoded
+          .map((model) => OfflineCart.fromJson(model))
+          .toList();
+    } catch (_) {
+      /// A malformed mirror must never block deleting from the cart.
+      list = [];
     }
   }
 

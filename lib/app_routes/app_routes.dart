@@ -36,6 +36,7 @@ class AppRoutes {
   static const executiveAttendanceList = '/executive-attendance-list';
   static const orderList = '/order-list';
   static const profile = '/profile';
+  static const profileSection = '/profile-section';
   static const addCompany = '/add-company';
   static const imagePreview = '/image-preview';
   static const imagePreviewCam = '/image-preview-cam';
@@ -49,6 +50,7 @@ class AppRoutes {
   static const leaveHistory = '/leave-history';
   static const executiveAttendance = '/executive-attendance';
   static const selectBrand = '/select-brand';
+  static const quickOrder = '/quick-order';
   static const accountModule = '/account-module';
   static const entry = '/entry';
   static const changeCompany = '/change-Company';
@@ -99,6 +101,9 @@ class AppRoutes {
   //Indent Module
   static const indentScreen ='/indent';
   static const indentList   ='/indentList';
+
+  //Employee Master
+  static const employeeMaster ='/employeeMaster';
 
   //Issue Item
   static const issueItem     ='/issueItem';

@@ -240,6 +240,11 @@ import 'screen/ui/home/home_controller.dart';
 import 'services/api_service/request_keys.dart';
 import 'utils/show_message.dart';
 
+/// Menu id the ERP publishes for this module. Confirmed 2026-08-26 from the
+/// live menu list: "Employee onboarding" -> 2812. The home grid also matches
+/// the menu by name as a backstop if the id ever changes.
+const int kEmployeeMasterMenuId = 2812;
+
 class HomeViewNewController extends AppBaseController {
   HomeController homeController = Get.find<HomeController>();
   RxInt unApprovalCount = 0.obs;
@@ -398,6 +403,9 @@ class HomeViewNewController extends AppBaseController {
       'Material Received'    : AppAssets.mrnrIcon,
       'Create Indent'        : AppAssets.indentIcon,
       'Item Issue'           : AppAssets.issueItemIcon,
+      // No dedicated employee art in assets/iconsnew — the Executive List glyph
+      // is the closest people icon. Swap when design supplies one.
+      'Employee onboarding'      : AppAssets.executivenewIcon,
     };
   }
 
@@ -425,6 +433,10 @@ class HomeViewNewController extends AppBaseController {
     if (menuId == 2769) return AppRoutes.indentList;
     if (menuId == 2770) return AppRoutes.issueItemList;
     if (menuId == 2700) return AppRoutes.ticketListScreen;
+    // Employee Master has no id from the backend yet. The home grid also
+    // matches this menu by name, so it opens regardless; fill the real id in
+    // here once they publish it.
+    if (menuId == 2812) return AppRoutes.employeeMaster;
     return AppRoutes.homeNew;
   }
 }

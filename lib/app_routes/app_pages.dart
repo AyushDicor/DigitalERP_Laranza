@@ -43,12 +43,14 @@ import 'package:digitalerp/screen/ui/home/cart/your_order/your_order_view.dart';
 import 'package:digitalerp/screen/ui/home/customer_list/customer_list_view.dart';
 import 'package:digitalerp/screen/ui/home/dashboard/dashboard_view.dart';
 import 'package:digitalerp/screen/ui/home/dashboard/map/map_view.dart';
+import 'package:digitalerp/screen/ui/home/drawer/profile/profile_section_view.dart';
 import 'package:digitalerp/screen/ui/home/drawer/profile/profile_view.dart';
 import 'package:digitalerp/screen/ui/home/executive_list/executive_attendance/approved_or_rejected_leave_view/approve_or_rejected_leaves_view.dart';
 import 'package:digitalerp/screen/ui/home/executive_list/executive_attendance/executive_attendance_list/executive_attendance_list_view.dart';
 import 'package:digitalerp/screen/ui/home/executive_list/executive_attendance/executive_attendance_view.dart';
 import 'package:digitalerp/screen/ui/home/executive_list/executive_list_view.dart';
 import 'package:digitalerp/screen/ui/home/home_view.dart';
+import 'package:digitalerp/screen/ui/home/employee_master/employee_screens/employee_list_screen.dart';
 import 'package:digitalerp/screen/ui/home/indent/indent_screens/indent_list_screen.dart';
 import 'package:digitalerp/screen/ui/home/issue%20item/issue_item_screens/issue_item_list_screen.dart';
 import 'package:digitalerp/screen/ui/home/mis_module/attendance_report/attendance_report_view.dart';
@@ -65,6 +67,7 @@ import 'package:digitalerp/screen/ui/home/mrn_module/mrn_screens/mrn_list_screen
 import 'package:digitalerp/screen/ui/home/order/order_detail/order_detail_view.dart';
 import 'package:digitalerp/screen/ui/home/order/order_list/order_list_view.dart';
 import 'package:digitalerp/screen/ui/home/order/order_view.dart';
+import 'package:digitalerp/screen/ui/home/order/quick_order/quick_order_view.dart';
 import 'package:digitalerp/screen/ui/home/order/select_brand/select_brand_view.dart';
 import 'package:digitalerp/screen/ui/home/order/select_category/product_list/product_details/product_details_view.dart';
 import 'package:digitalerp/screen/ui/home/order/select_category/product_list/product_list_view.dart';
@@ -242,6 +245,10 @@ class AppPages {
       page: () => const ProfileView(),
     ),
     GetPage(
+      name: AppRoutes.profileSection,
+      page: () => const ProfileSectionView(),
+    ),
+    GetPage(
       name: AppRoutes.addCompany,
       page: () => const AddCompanyView(),
     ),
@@ -280,6 +287,10 @@ class AppPages {
     GetPage(
       name: AppRoutes.selectBrand,
       page: () => const SelectBrandView(),
+    ),
+    GetPage(
+      name: AppRoutes.quickOrder,
+      page: () => const QuickOrderView(),
     ),
     GetPage(
       name: AppRoutes.selectCategory,
@@ -444,6 +455,10 @@ class AppPages {
       binding: BindingsBuilder(() {
         Get.lazyPut(() => IndentListController());
       }),
+    ),
+    GetPage(
+      name: AppRoutes.employeeMaster,
+      page: () => const EmployeeListScreen(),
     ),
     GetPage(
       name: AppRoutes.issueItemList,

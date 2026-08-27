@@ -64,10 +64,15 @@ class OrderController extends AppBaseController {
     Get.toNamed(AppRoutes.cart);
   }
 
+  /// Opens the single-screen order entry (Company + Brand on top, products
+  /// with inline quantities below). The old Brand -> Category -> Product
+  /// drill-down still exists at [AppRoutes.selectBrand] but is no longer
+  /// reachable from here.
   void tapOnAdd() {
-    Get.toNamed(AppRoutes.selectBrand);
-
-    // Get.toNamed(AppRoutes.selectCategory);
+    Get.toNamed(AppRoutes.quickOrder)?.then((_) {
+      getCartCount();
+      setSegmentValue(selectedSegmentVal);
+    });
   }
 
   setSegmentValue(int i) {

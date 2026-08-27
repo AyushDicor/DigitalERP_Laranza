@@ -9,6 +9,10 @@ class ApiMethods {
 
   String login                = 'Login';
   String updateProfile        = 'UserProfile/userProfile';
+  // Employee Master profile — pending on the backend, see PROFILE_API_CONTRACT.md
+  String employeeProfile      = 'EmployeeProfile/employeeProfileDetail';
+  String employeeProfileSave  = 'EmployeeProfile/saveEmployeeProfileSection';
+  String employeeProfileLookups = 'EmployeeProfile/employeeProfileLookups';
   String executiveDropDown    = 'ExecutiveReportPerson/ExecutiveReportPersonList';
   String mobileOtpVerify      = 'MobileVerify/mobileOtpVerify';
   String updateToken          = 'updatetoken/usercurrenttoken';

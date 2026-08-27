@@ -20,11 +20,20 @@ class SelectCompanyController extends AppBaseController {
   bool isManager = false;
   PartyDropdownData? partyData;
 
+  /// Full list from the server, never mutated by searching.
   List<PartyDropdownData> companyList = [];
+
+  /// What the list actually renders. The old code assigned search results back
+  /// over [companyList], so each keystroke narrowed an already-narrowed list
+  /// and only a full re-fetch could restore it.
+  List<PartyDropdownData> filteredList = [];
 
   ExecutiveDropdownData? selectedDropdownValue;
 
   Position? currentPosition;
+
+  /// Party id currently being geo-validated, so only that row shows a spinner.
+  int? validatingPartyId;
 
 
   @override
@@ -57,17 +66,13 @@ class SelectCompanyController extends AppBaseController {
     }*/
   }
   void searchCompany(String value) {
-    if(value.isEmpty){
-      getPartyList();
-      update();
-    }else{
-      final suggestions = companyList.where((element) {
-        final productTitle = element.partyname!.toLowerCase();
-        final input = searchController.text.toLowerCase();
-        return productTitle.contains(input);
-      }).toList();
-      companyList = suggestions;
-      update(); }
+    final query = value.trim().toLowerCase();
+    filteredList = query.isEmpty
+        ? List<PartyDropdownData>.from(companyList)
+        : companyList
+            .where((e) => (e.partyname ?? '').toLowerCase().contains(query))
+            .toList();
+    update();
   }
 
   void setDropdownValue(ExecutiveDropdownData value) {
@@ -93,9 +98,10 @@ class SelectCompanyController extends AppBaseController {
       var res = await api.getPartyDropdownList(body);
       if (res.status == 200) {
         companyList = res.data ?? [];
+        searchCompany(searchController.text);
         if (companyList.length > 1) {
           isManager = true;
-        } else {
+        } else if (companyList.isNotEmpty) {
           partyData = companyList.first;
         }
         update();
@@ -115,14 +121,14 @@ class SelectCompanyController extends AppBaseController {
       Map<String, String> body = {};
       body[RequestKeys.compId] = _homeController.currentUserData?.compId.toString() ?? '39';
       body[RequestKeys.userId] = _homeController.currentUserData?.userid.toString() ?? '39';
-      body[RequestKeys.partyId] = companyList[index].partyid.toString();
+      body[RequestKeys.partyId] = filteredList[index].partyid.toString();
 
 
 
       var res = await api.checkPartyValidation(body);
       if (res.status == 200) {
         if(res.success??true){
-          yourOrderController.selectCompany = companyList[index];
+          yourOrderController.selectCompany = filteredList[index];
           update();
           backTap();
         }else{
@@ -139,20 +145,27 @@ class SelectCompanyController extends AppBaseController {
       setBusy(false);
     }
   }
+  /// Indexes [filteredList], not [companyList] — after a search the two no
+  /// longer line up and the old code selected whichever party happened to sit
+  /// at that position in the unfiltered list.
   void checkCompanyLatLng(int index) async {
+    if (index < 0 || index >= filteredList.length) return;
+    final party = filteredList[index];
+    validatingPartyId = party.partyid;
+    update();
     try {
-      isListLoading = true;
       Map<String, String> body = {};
       body[RequestKeys.compId] = _homeController.currentUserData?.compId.toString() ?? '39';
       body[RequestKeys.userId] = _homeController.currentUserData?.userid.toString() ?? '39';
-      body[RequestKeys.partyId] = companyList[index].partyid.toString();
+      body[RequestKeys.partyId] = party.partyid.toString();
       body[RequestKeys.latitude] = currentPosition?.latitude.toString()??'0';
       body[RequestKeys.longitude] = currentPosition?.longitude.toString()??'0';
       var res = await api.matchPartyLatLng(body);
       if (res.status == 200) {
         if(res.success??true){
-          yourOrderController.selectCompany = companyList[index];
-          print("Selected Compny=>${yourOrderController.selectCompany}");
+          yourOrderController.selectCompany = party;
+          yourOrderController.persistSelectedParty();
+          yourOrderController.update();
           update();
           backTap();
         }else{
@@ -162,11 +175,11 @@ class SelectCompanyController extends AppBaseController {
       } else {
         ShowMessage.showSnackBar('Server Res', res.message.toString());
       }
-      isListLoading = false;
     } catch (e) {
       ShowMessage.showSnackBar('Server Res', '$e');
     } finally {
-      setBusy(false);
+      validatingPartyId = null;
+      update();
     }
   }
 

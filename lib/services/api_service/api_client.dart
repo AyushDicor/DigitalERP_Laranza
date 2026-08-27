@@ -14,8 +14,10 @@ class ApiClient extends GetConnect {
     return _apiClient;
   }
   ApiClient._internal();
+
+  //static const baseAppUrl = 'http://ulightwebservice.digitalerp.biz/api/';
   static const baseAppUrl = 'http://supportapi.digitalerp.biz/api/';
- // static const baseAppUrl = 'http://salewebservice.digitalerp.biz/api/';
+  // static const baseAppUrl = 'http://salewebservice.digitalerp.biz/api/';
   @override
   void onInit() {
     baseUrl = baseAppUrl;
@@ -199,7 +201,6 @@ class ApiClient extends GetConnect {
       return '';
     }
   }
-
 
   /*// Post request
   Future<String> postMethod(

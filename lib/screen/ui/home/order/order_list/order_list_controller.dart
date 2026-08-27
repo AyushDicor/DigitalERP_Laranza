@@ -46,9 +46,7 @@ class OrderListController extends AppBaseController {
   void tapOnLeaveHistory() {}
 
   void tapOnAdd() {
-    Get.toNamed(AppRoutes.selectBrand);
-
-    // Get.toNamed(AppRoutes.selectCategory);
+    Get.toNamed(AppRoutes.quickOrder);
   }
 
   void tapOnCard(String orderId) {

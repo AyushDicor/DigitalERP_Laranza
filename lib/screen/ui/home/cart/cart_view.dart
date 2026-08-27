@@ -556,6 +556,35 @@ class _AppBar extends StatelessWidget {
               color: Color(0xFF1A1A2E),
             ),
           ),
+          const Spacer(),
+
+          /// The cart lives on the server and survives app restarts, so stale
+          /// rows from an earlier session need a one-tap way out.
+          GetBuilder<CartController>(
+            builder: (ctrl) => ctrl.cartList.isEmpty
+                ? const SizedBox.shrink()
+                : TextButton.icon(
+                    onPressed:
+                        ctrl.isClearingCart ? null : () => ctrl.tapOnClearAll(),
+                    icon: ctrl.isClearingCart
+                        ? const SizedBox(
+                            height: 14,
+                            width: 14,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Color(0xFFEF4444)),
+                          )
+                        : const Icon(Icons.delete_sweep_outlined,
+                            size: 18, color: Color(0xFFEF4444)),
+                    label: Text(
+                      ctrl.isClearingCart ? 'Clearing' : 'Clear all',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFEF4444),
+                      ),
+                    ),
+                  ),
+          ),
         ],
       ),
     );

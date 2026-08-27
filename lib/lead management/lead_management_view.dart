@@ -737,6 +737,7 @@
 
 
 
+import 'package:digitalerp/app_routes/app_routes.dart';
 import 'package:digitalerp/lead%20management/lead%20management%20controller/lead_management_controller.dart';
 import 'package:digitalerp/lead%20management/lead_entry_view.dart';
 import 'package:digitalerp/lead%20management/lead_filtter_view.dart';
@@ -744,7 +745,6 @@ import 'package:digitalerp/lead%20management/lead_followup_details_view.dart';
 import 'package:digitalerp/lead%20management/lead_followup_history.dart';
 import 'package:digitalerp/model/getleadentry_response_model.dart';
 import 'package:digitalerp/screen/base/base_controller.dart';
-import 'package:digitalerp/screen/ui/home/order/select_brand/select_brand_view.dart';
 import 'package:digitalerp/screen/ui/issue_ticket/lead_view/call_logs_screen.dart';
 import 'package:digitalerp/screen/ui/issue_ticket/lead_view/create_quote_screen.dart';
 import 'package:digitalerp/screen/ui/issue_ticket/lead_view/lead_managment_screen.dart';
@@ -1187,7 +1187,7 @@ class _LeadCard extends StatelessWidget {
                   () => _showLeadActions(context)),
               const SizedBox(width: 6),
               GestureDetector(
-                onTap: () => Get.to(SelectBrandView()),
+                onTap: () => Get.toNamed(AppRoutes.quickOrder),
                 child: Container(
                   padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

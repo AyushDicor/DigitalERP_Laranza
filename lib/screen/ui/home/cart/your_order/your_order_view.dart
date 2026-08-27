@@ -1,573 +1,500 @@
-import 'package:digitalerp/response/get_executive_dropdown_response.dart';
-import 'package:digitalerp/screen/base/base_controller.dart';
+import 'package:digitalerp/response/get_cart_list_response.dart';
 import 'package:digitalerp/screen/ui/home/cart/your_order/your_order_controller.dart';
-import 'package:digitalerp/utils/app_assets.dart';
-import 'package:digitalerp/utils/app_constant.dart';
+import 'package:digitalerp/utils/app_constant_new.dart';
 import 'package:digitalerp/utils/app_network_image.dart';
-import 'package:digitalerp/utils/app_profile_image.dart';
-import 'package:digitalerp/utils/dottedline.dart';
 import 'package:digitalerp/utils/my_app_bar_new.dart';
-import 'package:digitalerp/utils/safeAreaWrapper.dart';
-import 'package:digitalerp/utils/utils.dart';
-import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
+/// Checkout / place-order screen.
+///
+/// Rebuilt to match the order-entry screens: a customer card with a Change
+/// action, the item list, a bill-summary card holding both discount inputs,
+/// and a sticky bottom bar carrying the grand total and the Place Order
+/// button.
 class YourOrderView extends StatelessWidget {
-  const YourOrderView({Key? key}) : super(key: key);
+  const YourOrderView({super.key});
+
+  static final NumberFormat _inr = NumberFormat('#,##,##0.00', 'en_IN');
+
+  static String _money(num? value) => '₹${_inr.format(value ?? 0)}';
 
   @override
   Widget build(BuildContext context) {
-//bool inputField = false;
     return GetBuilder<YourOrderController>(
       init: YourOrderController(),
-      builder: (controller) {
-        return Scaffold(
-          resizeToAvoidBottomInset: false,
-          body: Center(
-            child: Stack(
-              children: [
-                Positioned(
-                  top: 0,
-                  bottom: 0,
-                  right: 0,
-                  left: 0,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                        image: DecorationImage(
-                            image: AssetImage(AppAssets.dashboardBg),
-                            fit: BoxFit.fill)),
-                    child: SafeArea(
-                        child: MyAppBar(
-                            title: 'Your Order',
-                            onBackTap: () => controller.backTap())),
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  left: 0,
-                  bottom: 0,
-                  top: Get.height * 0.135,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(height: Get.height * 0.02),
-                        controller.isCustomer ?? false
-                            ? _companyCard2(controller)
-                            : TextFormField(
-                                decoration: const InputDecoration()
-                                    .searchTxtFieldStyle(
-                                        hint: 'Search Customer'),
-                                readOnly: true,
-                                onTap: () => controller.tapOnSearch(),
-                              ),
-                        const SizedBox(height: 10),
-                        // if (controller.orderController.isManager)
-                        //   _dropdown(controller),
-                        const SizedBox(height: 20),
-                        if (controller.selectCompany != null)
-                          _companyCard2(controller),
-
-                        _productList(controller),
-                        const SizedBox(height: 10),
-                        DottedLine(
-                            color: medGreyColor,
-                            width: double.maxFinite,
-                            space: 2,
-                            strokeWidth: 1),
-                        const SizedBox(height: 15),
-                        _amountLine(
-                          controller,
-                          name: 'Amount',
-                          amount: controller
-                              .cartController.cartList.first.subtotal
-                              .toString(),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Discount %',
-                              style:
-                                  const TextStyle().bold.copyWith(fontSize: 14),
-                            ),
-                            SizedBox(
-                              width: 70,
-                              height: 25,
-                              child: TextFormField(
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                maxLength: 2,
-                                textAlign: TextAlign.center,
-                                textAlignVertical: TextAlignVertical.bottom,
-                                cursorColor: Colors.grey,
-                                keyboardType: TextInputType.number,
-                                decoration: InputDecoration(
-                                  counterText: '',
-// contentPadding: EdgeInsets.all(0),
-                                  hintText: '%',
-                                  hintTextDirection: TextDirection.rtl,
-                                  fillColor: whiteColor,
-                                  filled: true,
-
-                                  border: InputBorder.none,
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(30),
-                                    borderSide: const BorderSide(
-                                      color: Colors.transparent,
-                                    ),
-                                  ),
-                                ),
-                                style: const TextStyle()
-                                    .bold
-                                    .copyWith(fontSize: 14, height: 1),
-                                controller: controller.discountController,
-                                focusNode: controller.discountFocus,
-                                onChanged: (value) {
-                                  controller.discountCalculate(value);
-                                },
-                              ),
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        _amountLine(
-                          controller,
-                          name: 'Subtotal',
-                          amount: controller.subTotal.toString(),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Cash Discount %',
-                              style:
-                                  const TextStyle().bold.copyWith(fontSize: 14),
-                            ),
-                            SizedBox(
-                              width: 70,
-                              height: 25,
-                              child: TextFormField(
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                maxLength: 2,
-                                textAlign: TextAlign.center,
-                                cursorColor: Colors.grey,
-                                keyboardType: TextInputType.number,
-                                textAlignVertical: TextAlignVertical.bottom,
-                                decoration: InputDecoration(
-                                  counterText: '',
-                                  hintText: '%',
-                                  hintTextDirection: TextDirection.rtl,
-                                  fillColor: whiteColor,
-                                  filled: true,
-                                  border: InputBorder.none,
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(30),
-                                    borderSide: const BorderSide(
-                                      color: Colors.transparent,
-                                    ),
-                                  ),
-                                ),
-                                style: const TextStyle().bold.copyWith(
-                                      fontSize: 14,
-                                    ),
-                                controller: controller.cashDiscountController,
-                                focusNode: controller.cashDiscountFocus,
-                                onChanged: (value) {
-                                  controller.cashDiscountCalculate(value);
-                                },
-                              ),
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        _amountLine(
-                          controller,
-                          name: 'Grand Total',
-                          amount: controller.grandTotal.toStringAsFixed(2),
-                        ),
-                        const SizedBox(height: 90),
-                        Shared.keyboardIsVisible(context)
-                            ? const SizedBox(
-                                height: 170,
-                              )
-                            : Container(),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  child: _bottomBtn(controller),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _productCard(YourOrderController controller, int index) {
-    var item = controller.cartController.cartList[index];
-    return Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: Colors.white,
-            boxShadow: const [
-              BoxShadow(
-                  color: Colors.black12, offset: Offset(0, 3), blurRadius: 5)
-            ]),
-        height: 105,
-        child: Row(
-          children: [
-            const SizedBox(width: 10),
-            AppNetworkImage(
-              image: item.productimage ?? '',
-              fit: BoxFit.fill,
-              height: Get.height * .1,
-              width: Get.width * .2,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.productname ?? '',
-                    style: const TextStyle()
-                        .bold
-                        .copyWith(fontSize: 14, color: Colors.black),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _txtView(
-                          name: 'Qty', value: item.quantity?.toString() ?? ''),
-                      _txtView(name: 'Unit', value: item.unit ?? ''),
-                      _txtView(
-                          name: 'Rate',
-                          value: item.itemrate?.toStringAsFixed(2) ?? '0',
-                          moneySign: true),
-                      _txtView(
-                          name: 'Amount',
-                          value: item.total?.toStringAsFixed(2) ?? '0',
-                          moneySign: true),
-                    ],
-                  )
-                ],
-              ),
-            )
-          ],
-        ));
-  }
-
-  Widget _txtView(
-          {required String name, required String value, bool? moneySign}) =>
-      Column(
-        children: [
-          Text(
-            name,
-            style: const TextStyle()
-                .bold
-                .copyWith(fontSize: 12, color: medGreyColor),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            moneySign ?? false ? '\u{20B9}$value' : value,
-            style: const TextStyle().bold.copyWith(color: Colors.black),
-          )
-        ],
-      );
-
-  Widget _dropdown(YourOrderController controller) =>
-      DropdownButtonHideUnderline(
-        child: DropdownButton2<ExecutiveDropdownData>(
-          buttonHeight: 40,
-          buttonPadding: const EdgeInsets.symmetric(horizontal: 20),
-          dropdownDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: dropdownBoxColor,
-          ),
-          buttonDecoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            gradient: blueDropdownGr,
-          ),
-          isExpanded: true,
-          value: controller.selectedDropdownValue,
-          hint: Text(
-            'Select Executive name',
-            style: const TextStyle().normal.copyWith(fontSize: 14),
-            overflow: TextOverflow.ellipsis,
-          ),
-          icon: Image.asset(
-            AppAssets.dropdownIcon,
-            width: 15,
-            height: 15,
-          ),
-          items: controller.orderController.executiveList.map((items) {
-            return DropdownMenuItem(
-              value: items,
-              child: Text(items.executiveName.toString()),
-            );
-          }).toList(),
-          onChanged: (ExecutiveDropdownData? newValue) {
-            controller.setDropdownValue(newValue!);
-          },
-        ),
-      );
-
-/*
-  Widget _categoryCard(YourOrderController controller) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Category',
-              style: const TextStyle().bold.copyWith(fontSize: 14)),
-          Container(
-            decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: customGradient(
-                    topColor: red3Color,
-                    bottomColor: red4Color,
-                    opacity: 0.13)),
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 15),
-            margin: const EdgeInsets.only(top: 15, bottom: 20),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  AppAssets.shoesCategoryIcon,
-                  height: 26,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Shoes',
-                  style: const TextStyle().bold.copyWith(color: categoryColor),
-                )
-              ],
-            ),
-          ),
-        ],
-      );
-*/
-
-  Widget _companyCard(YourOrderController controller) {
-    print("==>${controller.selectCompany?.partyid}");
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Company Name',
-            style: const TextStyle().bold.copyWith(fontSize: 14)),
-        Container(
-          decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              gradient: orangeDropdownGr(.19)),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          margin: const EdgeInsets.symmetric(vertical: 15),
-          child: Row(
+      builder: (ctrl) => Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
             children: [
-              ProfileImageView(
-                  size: 40,
-                  imageUrl: controller.selectCompany?.partyid.toString() ?? '',
-                  borderSize: 2),
-              ProfileImageView(
-                  size: 40,
-                  imageUrl: controller.selectCompany?.partyid.toString() ?? '',
-                  borderSize: 2),
-              const SizedBox(width: 5),
+              MyAppBar(
+                title: 'Place Order',
+                onBackTap: () => ctrl.backTap(),
+              ),
               Expanded(
-                child: Text(
-                  controller.selectCompany?.partyname ?? "",
-                  style: const TextStyle().bold,
-                  maxLines: 2,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                  children: [
+                    _sectionLabel('Customer'),
+                    const SizedBox(height: 8),
+                    _customerCard(ctrl),
+
+                    /// No executive picker here by design. The original screen
+                    /// had one but its call site was commented out, so
+                    /// `selectedDropdownValue` stayed null and every order was
+                    /// filed against the logged-in user's own account code.
+                    /// That attribution is deliberate — leave it alone.
+                    const SizedBox(height: 18),
+                    _sectionLabel(
+                        'Items (${ctrl.cartController.cartList.length})'),
+                    const SizedBox(height: 8),
+                    _items(ctrl),
+                    const SizedBox(height: 18),
+                    _sectionLabel('Bill Summary'),
+                    const SizedBox(height: 8),
+                    _billSummary(ctrl),
+                  ],
                 ),
-              )
+              ),
             ],
           ),
         ),
-/*
-          Text('Customer Name', style: const TextStyle().bold.copyWith(fontSize: 14)),
-          Container(
-            decoration:
-                BoxDecoration(borderRadius: BorderRadius.circular(10), gradient: blueDropdownGr),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            margin: const EdgeInsets.symmetric(vertical: 20),
-            child: Row(
-              children: [
-                ProfileImageView(
-                    size: 40, imageUrl: controller.selectCompany?.partyid.toString() ?? '', borderSize: 2),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    controller.selectCompany!.partyname ?? "",
-                    style: const TextStyle().bold,
-                    maxLines: 2,
+        bottomNavigationBar: _bottomBar(context, ctrl),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) => Text(
+        text,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: newTextPrimary,
+        ),
+      );
+
+  // Customer
+
+  Widget _customerCard(YourOrderController ctrl) {
+    /// A Customer-type user always orders for their own account, so there is
+    /// nothing to pick and no Change action.
+    final locked = ctrl.isCustomer ?? false;
+    final name = locked
+        ? (ctrl.companyName ?? '')
+        : (ctrl.selectCompany?.partyname ?? '');
+    final hasCustomer = name.trim().isNotEmpty;
+
+    if (!hasCustomer) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => ctrl.tapOnSearch(),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: newOrangeLightColor,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: newOrangeColor.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.person_add_alt_1_outlined,
+                  size: 20, color: newOrangeColor),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Select a customer to place this order',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF92400E),
                   ),
-                )
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 20, color: newOrangeColor),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: newSurfaceColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: newBorderColor),
+      ),
+      child: Row(
+        children: [
+          _initialsAvatar(name),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: newTextPrimary,
+              ),
+            ),
+          ),
+          if (!locked) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => ctrl.tapOnSearch(),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text(
+                'Change',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: newBlueColor,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _initialsAvatar(String name) {
+    final trimmed = name.trim();
+    final initials = trimmed.isEmpty
+        ? '?'
+        : trimmed
+            .split(RegExp(r'\s+'))
+            .take(2)
+            .map((w) => w.isEmpty ? '' : w[0])
+            .join()
+            .toUpperCase();
+    return Container(
+      height: 42,
+      width: 42,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: newBlueColor.withValues(alpha: 0.10),
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        initials,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          color: newBlueColor,
+        ),
+      ),
+    );
+  }
+
+  // Items
+
+  Widget _items(YourOrderController ctrl) {
+    final cart = ctrl.cartController.cartList;
+    if (cart.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 28),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: newSurfaceColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: newBorderColor),
+        ),
+        child: const Text('Your cart is empty',
+            style: TextStyle(color: newTextSecondary, fontSize: 13)),
+      );
+    }
+    return Column(
+      children: List.generate(cart.length, (i) => _itemRow(cart[i])),
+    );
+  }
+
+  Widget _itemRow(GetCartListData item) {
+    final qty = item.quantity ?? 0;
+    final qtyText = qty % 1 == 0 ? qty.toInt().toString() : qty.toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: newBorderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: AppNetworkImage(
+              image: item.productimage,
+              height: 52,
+              width: 52,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  item.productname ?? '',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: newTextPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$qtyText ${item.unit ?? ''}  ×  ${_money(item.itemrate)}',
+                  style:
+                      const TextStyle(fontSize: 11.5, color: newTextSecondary),
+                ),
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          Text(
+            _money(item.total),
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
+              color: newTextPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-           */
+  // Bill summary
+
+  Widget _billSummary(YourOrderController ctrl) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: newSurfaceColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: newBorderColor),
+      ),
+      child: Column(
+        children: [
+          _amountLine('Amount', _money(ctrl.cartSubtotal)),
+          const SizedBox(height: 12),
+          _percentLine(
+            label: 'Discount %',
+            controller: ctrl.discountController,
+            focusNode: ctrl.discountFocus,
+            onChanged: ctrl.discountCalculate,
+          ),
+          const SizedBox(height: 12),
+          _amountLine('Subtotal', _money(ctrl.subTotal)),
+          const SizedBox(height: 12),
+          _percentLine(
+            label: 'Cash Discount %',
+            controller: ctrl.cashDiscountController,
+            focusNode: ctrl.cashDiscountFocus,
+            onChanged: ctrl.cashDiscountCalculate,
+          ),
+          if (ctrl.cartShipping > 0) ...[
+            const SizedBox(height: 12),
+            _amountLine('Shipping', _money(ctrl.cartShipping)),
+          ],
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1, thickness: 1, color: newBorderColor),
+          ),
+          _amountLine(
+            'Grand Total',
+            _money(ctrl.grandTotal),
+            emphasised: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _amountLine(String name, String amount, {bool emphasised = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          name,
+          style: TextStyle(
+            fontSize: emphasised ? 14 : 13,
+            fontWeight: emphasised ? FontWeight.w800 : FontWeight.w500,
+            color: emphasised ? newTextPrimary : newTextSecondary,
+          ),
+        ),
+        Text(
+          amount,
+          style: TextStyle(
+            fontSize: emphasised ? 16 : 13,
+            fontWeight: emphasised ? FontWeight.w800 : FontWeight.w600,
+            color: emphasised ? newBlueColor : newTextPrimary,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _companyCard2(YourOrderController controller) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Company Name',
-              style: const TextStyle().bold.copyWith(fontSize: 14)),
-          Container(
-            decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                gradient: orangeDropdownGr(.19)),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            margin: const EdgeInsets.symmetric(vertical: 15),
-            child: Row(
-              children: [
-                ProfileImageView(
-                    size: 40,
-                    imageUrl:
-                        controller.selectCompany?.partyid.toString() ?? '',
-                    borderSize: 2),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: controller.isCustomer ?? false
-                      ? Text(
-                          controller.companyName ?? '',
-                          style: const TextStyle().bold,
-                          maxLines: 2,
-                        )
-                      : Text(
-                          controller.selectCompany?.partyname ?? "",
-                          style: const TextStyle().bold,
-                          maxLines: 2,
-                        ),
-                )
-              ],
-            ),
-          ),
-/*
-          Text('Customer Name', style: const TextStyle().bold.copyWith(fontSize: 14)),
-          Container(
-            decoration:
-                BoxDecoration(borderRadius: BorderRadius.circular(10), gradient: blueDropdownGr),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            margin: const EdgeInsets.symmetric(vertical: 20),
-            child: Row(
-              children: [
-                ProfileImageView(
-                    size: 40, imageUrl: controller.selectCompany?.partyid.toString() ?? '', borderSize: 2),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Text(
-                    controller.selectCompany!.partyname ?? "",
-                    style: const TextStyle().bold,
-                    maxLines: 2,
-                  ),
-                )
-              ],
-            ),
-          ),
-
-           */
-        ],
-      );
-
-  Widget _productList(YourOrderController controller) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Product', style: const TextStyle().bold.copyWith(fontSize: 14)),
-          ListView.builder(
-            shrinkWrap: true,
-            padding: const EdgeInsets.only(top: 10, bottom: 20),
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: controller.cartController.cartList.length,
-            itemBuilder: (context, index) {
-              return _productCard(controller, index);
-            },
-          ),
-        ],
-      );
-
-  Widget _amountLine(YourOrderController controller,
-          {required String name, required String amount}) =>
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            name,
-            style: const TextStyle().bold.copyWith(fontSize: 14),
-          ),
-          Text(
-            '\u{20B9}${double.parse(amount).toStringAsFixed(2)}',
-            style: const TextStyle().bold.copyWith(fontSize: 14),
-          ),
-        ],
-      );
-
-  Widget _bottomBtn(YourOrderController controller) => SafeAreaWrapper(
-        child: Container(
-          width: Get.width,
-          height: 60,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-          decoration: const BoxDecoration(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30.0)),
-            gradient: gr1,
-          ),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(width: 26),
-                  controller.grandTotal == 0.0
-                      ? Text(
-                          '\u{20B9}${(controller.cartController.cartList.first.subtotal)!.toStringAsFixed(2)}',
-                          style: const TextStyle()
-                              .bold
-                              .copyWith(color: Colors.white, fontSize: 20),
-                        )
-                      : Text(
-                          '\u{20B9}${controller.grandTotal.toStringAsFixed(2)}',
-                          style: const TextStyle()
-                              .bold
-                              .copyWith(color: Colors.white, fontSize: 20),
-                        ),
-                ],
-              ),
-              MaterialButton(
-                onPressed: () {
-                  controller.tapOnPlaceOrder();
-                },
-                shape: const StadiumBorder(),
-                color: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(vertical: 6, horizontal: 35),
-                child: Text(
-                  'Place order',
-                  style: const TextStyle().bold.copyWith(color: red2Color),
-                ),
-              )
-            ],
+  Widget _percentLine({
+    required String label,
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required ValueChanged<String> onChanged,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: newTextSecondary,
           ),
         ),
-      );
+        SizedBox(
+          width: 78,
+          height: 36,
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            onChanged: onChanged,
+            textAlign: TextAlign.center,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+            ],
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: newTextPrimary,
+            ),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: '0',
+              hintStyle: const TextStyle(color: newTextHint, fontSize: 14),
+              suffixText: '%',
+              suffixStyle:
+                  const TextStyle(color: newTextSecondary, fontSize: 12),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: newBorderColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: newBorderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: newBlueColor, width: 1.5),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Bottom bar
+
+  Widget _bottomBar(BuildContext context, YourOrderController ctrl) {
+    final cartEmpty = ctrl.cartController.cartList.isEmpty;
+    final needsCustomer =
+        !(ctrl.isCustomer ?? false) && ctrl.selectCompany?.partyid == null;
+    final canPlace = !cartEmpty && !needsCustomer && !ctrl.isBusy;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          16, 10, 16, 10 + MediaQuery.of(context).padding.bottom),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: newBorderColor)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Grand Total',
+                  style: TextStyle(fontSize: 11, color: newTextSecondary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _money(ctrl.grandTotal),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: newBlueColor,
+                  ),
+                ),
+                if (needsCustomer && !cartEmpty)
+                  const Text(
+                    'Select a customer to continue',
+                    style: TextStyle(fontSize: 10.5, color: newOrangeColor),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              onPressed: canPlace ? () => ctrl.tapOnPlaceOrder() : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: newBlueColor,
+                disabledBackgroundColor: newBorderColor,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 26),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: ctrl.isBusy
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text(
+                      'Place Order',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
