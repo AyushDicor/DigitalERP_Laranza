@@ -1,14 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// employee_read_models.dart
-// Read models for employeeonboardinglist / employeeonboarddetail.
-//
-// Key spellings confirmed 2026-08-26 against the live endpoints. Note the two
-// read APIs disagree with each other and with the save: the list returns
-// `employeename`, the detail returns `name`, and the save takes `name`. Reads
-// go through [pick], which tries all of them, so neither side can break the
-// other. The record id is `partyid` everywhere.
-// ─────────────────────────────────────────────────────────────────────────────
-
 /// First non-empty value among [keys].
 String pick(Map<String, dynamic> j, List<String> keys) {
   for (final k in keys) {

@@ -1,11 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// employee_model.dart
-// Models for the Employee Master module.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Generic {id, label} pair every dropdown on this screen is normalised into,
-/// so the UI does not care whether an option came from the designation API,
-/// the shared indent dropdown, the state list, or a hardcoded list.
 class EmpOption {
   final String id;
   final String label;
@@ -39,11 +31,6 @@ class EmpOption {
   int get hashCode => id.hashCode;
 }
 
-/// The payload the Save button posts.
-///
-/// Key names below are this app's best guess at the ERP's column names, taken
-/// from the web Employee Master form. The backend team has not shipped the
-/// endpoint yet — when they do, only the keys in [toJson] should need to move.
 class EmployeeMasterPayload {
   // Company scope
   final int compId;

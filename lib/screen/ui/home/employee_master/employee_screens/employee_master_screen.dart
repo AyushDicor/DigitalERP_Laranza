@@ -1,9 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// employee_master_screen.dart
-// Employee Master entry form — General / Document / Address details,
-// mirroring the sections of the web ERP screen.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -54,7 +48,7 @@ class EmployeeMasterScreen extends StatelessWidget {
     );
   }
 
-  // ── App bar ────────────────────────────────────────────────────────────────
+
   Widget _appBar(EmployeeMasterController ctrl) {
     return Container(
       color: Colors.white,
@@ -85,9 +79,6 @@ class EmployeeMasterScreen extends StatelessWidget {
                     color: empTextSecondary)),
           ]),
         ),
-        // The card normally appears after a successful save. This shows it from
-        // the form as it stands, so the layout can be checked before the save
-        // API is live. Safe to drop once it is.
         GestureDetector(
           onTap: () =>
               Get.to(() => EmployeeCardScreen(data: ctrl.buildCardData())),
@@ -105,9 +96,6 @@ class EmployeeMasterScreen extends StatelessWidget {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // VENDOR + SITE — the scope the employee record belongs to, chosen first
-  // ═══════════════════════════════════════════════════════════════════════════
   Widget _scopeDetails(EmployeeMasterController ctrl) {
     return EmpCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -137,9 +125,6 @@ class EmployeeMasterScreen extends StatelessWidget {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GENERAL DETAILS
-  // ═══════════════════════════════════════════════════════════════════════════
   Widget _generalDetails(BuildContext context, EmployeeMasterController ctrl) {
     return EmpCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -175,7 +160,6 @@ class EmployeeMasterScreen extends StatelessWidget {
         ]),
         const SizedBox(height: 10),
 
-        // Department + Designation
         Row(children: [
           Expanded(
             child: EmpDropdown<EmpOption>(
@@ -237,7 +221,7 @@ class EmployeeMasterScreen extends StatelessWidget {
         ]),
         const SizedBox(height: 10),
 
-        // Personal phone
+
         EmpField(
           label: 'Personal Phone Number',
           controller: ctrl.phoneCtrl,
@@ -379,9 +363,6 @@ class EmployeeMasterScreen extends StatelessWidget {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SALARY & WORK
-  // ═══════════════════════════════════════════════════════════════════════════
   Widget _salaryAndWork(EmployeeMasterController ctrl) {
     return EmpCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -434,7 +415,6 @@ class EmployeeMasterScreen extends StatelessWidget {
           ),
         ]),
 
-        // Default → pick a shift. Manual → type the hours. Only one shows.
         if (ctrl.isWorkHoursDefault) ...[
           const SizedBox(height: 10),
           EmpDropdown<EmpOption>(
@@ -476,9 +456,6 @@ class EmployeeMasterScreen extends StatelessWidget {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DOCUMENT DETAILS
-  // ═══════════════════════════════════════════════════════════════════════════
   Widget _documentDetails(
       BuildContext context, EmployeeMasterController ctrl) {
     return EmpCard(
@@ -560,9 +537,6 @@ class EmployeeMasterScreen extends StatelessWidget {
     );
   }
 
-  /// Aadhar / PAN can be shot with the camera, taken from the gallery, or
-  /// picked from storage — the card is usually in hand on site, so camera is
-  /// listed first.
   void _documentSourceSheet(BuildContext context, EmployeeMasterController ctrl,
       EmpFileSlot slot, String title) {
     showModalBottomSheet(
@@ -615,9 +589,6 @@ class EmployeeMasterScreen extends StatelessWidget {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ADDRESS DETAILS
-  // ═══════════════════════════════════════════════════════════════════════════
   Widget _addressDetails(EmployeeMasterController ctrl) {
     return EmpCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -652,8 +623,7 @@ class EmployeeMasterScreen extends StatelessWidget {
               value: ctrl.selectedCity,
               items: ctrl.cityList,
               isLoading: ctrl.isLoadingCity,
-              // City is meaningless before a state is chosen, and the list is
-              // fetched per state, so keep it locked until then.
+
               enabled: ctrl.selectedState != null,
               hint: ctrl.selectedState == null ? 'Select state first' : 'Select',
               itemLabel: (o) => o.label,
@@ -677,7 +647,7 @@ class EmployeeMasterScreen extends StatelessWidget {
     );
   }
 
-  // ── Save bar ───────────────────────────────────────────────────────────────
+
   Widget _bottomBar(EmployeeMasterController ctrl) {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -724,8 +694,6 @@ class EmployeeMasterScreen extends StatelessWidget {
   }
 }
 
-/// PAN numbers are stored uppercase in the ERP; upper-casing as the user types
-/// avoids a mismatch between what they see and what gets posted.
 class _UpperCaseFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(

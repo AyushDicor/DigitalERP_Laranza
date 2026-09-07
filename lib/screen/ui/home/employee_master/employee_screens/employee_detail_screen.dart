@@ -1,9 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// employee_detail_screen.dart
-// Read-only view of one employee (POST api/employeeonboarddetail).
-// No editing by design — the list is view-only.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
@@ -18,8 +12,6 @@ import '../employee_widgets.dart';
 import 'employee_card_screen.dart';
 
 class EmployeeDetailScreen extends StatefulWidget {
-  /// The list row that was tapped — used to paint the header immediately while
-  /// the full record loads, so the screen is never blank on open.
   final EmployeeListItem item;
 
   const EmployeeDetailScreen({super.key, required this.item});
@@ -59,8 +51,6 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
 
       if (!mounted) return;
 
-      // Body-level success, not the HTTP code — this API answers 200 even when
-      // it is rejecting the request.
       if (EmployeeMasterRepo.succeeded(res)) {
         final record = extractRecord(res.data);
         setState(() {
@@ -147,8 +137,6 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
     );
   }
 
-  /// Rebuilds the same ID card shown after a save, from the stored record.
-  /// The photo comes as a server URL here rather than a local file.
   void _openCard() {
     final d = _detail!;
     Get.to(() => EmployeeCardScreen(

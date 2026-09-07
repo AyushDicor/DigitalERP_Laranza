@@ -1,9 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// employee_list_screen.dart
-// Employee Master landing screen: search, list, and an Add button that opens
-// the create form. Tapping a row opens the read-only detail screen.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -25,8 +19,6 @@ class EmployeeListScreen extends StatelessWidget {
         floatingActionButton: FloatingActionButton(
           backgroundColor: empBlueColor,
           onPressed: () async {
-            // Refresh on return so a newly-added employee shows without the
-            // user having to pull down.
             await Get.to(() => const EmployeeMasterScreen());
             ctrl.fetchList();
           },

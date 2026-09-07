@@ -1,11 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// employee_card_screen.dart
-// The employee ID card generated once the details are saved.
-//
-// Deliberately small: photo + name + five fields. The on-screen card and the
-// PDF are laid out from the same [EmpCardData], so what you see is what prints.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import 'dart:developer';
 import 'dart:io';
 
@@ -24,8 +16,6 @@ import 'package:digitalerp/screen/ui/home/home_controller.dart';
 import '../employee_response/employee_read_models.dart';
 import '../employee_widgets.dart';
 
-/// Everything the card shows. Built from the form once, so the screen and the
-/// PDF can never drift apart.
 class EmpCardData {
   final String name;
   final String designation;
@@ -35,17 +25,13 @@ class EmpCardData {
   final String phone;
   final String employeeId;
 
-  /// Local file — set when the card is built straight after a save, while the
-  /// picked photo is still on the device.
+
   final String photoPath;
 
-  /// Server URL — set when the card is opened from an existing employee's
-  /// detail, where the only copy of the photo lives on the ERP.
+
   final String photoUrl;
 
-  /// From api/employeeidcard. The company name and logo live nowhere else in
-  /// the app's session, and qrData is built server-side so the app never has
-  /// to invent the QR payload.
+
   final String companyName;
   final String companyLogoUrl;
   final String qrData;
@@ -65,10 +51,6 @@ class EmpCardData {
     this.qrData = '',
   });
 
-  /// Built straight from the ERP's own card endpoint — the preferred source,
-  /// because it is the only one that knows the company and the QR payload.
-  /// api/employeeidcard does not return the vendor or department, so those are
-  /// carried over from whatever the caller already knew rather than dropped.
   factory EmpCardData.fromCardInfo(
     EmployeeCardInfo i, {
     String department = '',
@@ -93,8 +75,6 @@ class EmpCardData {
 
   bool get hasNetworkPhoto => photoFile == null && photoUrl.startsWith('http');
 
-  /// Label/value rows, skipping anything the form left blank so the card never
-  /// shows an empty line.
   List<MapEntry<String, String>> get rows => [
         if (employeeId.trim().isNotEmpty) MapEntry('EMP ID', employeeId),
         if (vendor.trim().isNotEmpty) MapEntry('VENDOR', vendor),
@@ -105,17 +85,9 @@ class EmpCardData {
 }
 
 class EmployeeCardScreen extends StatefulWidget {
-  /// What to draw until (or unless) the card endpoint answers. For a fresh
-  /// save this holds the form's own values and the local photo, so the card is
-  /// never blank while the network call is in flight.
+
   final EmpCardData data;
-
-  /// When set, api/employeeidcard is asked for the authoritative version —
-  /// company name, logo and the QR payload, none of which the app can derive.
   final String partyId;
-
-  /// True right after a save, where the green tick is the point of the screen.
-  /// False when an existing employee's card is opened from their detail.
   final bool justSaved;
 
   const EmployeeCardScreen({
@@ -131,9 +103,6 @@ class EmployeeCardScreen extends StatefulWidget {
 
 class _EmployeeCardScreenState extends State<EmployeeCardScreen> {
   bool _busy = false;
-
-  /// Starts as the caller's snapshot, then upgrades in place once the ERP's
-  /// card endpoint answers.
   late EmpCardData _card = widget.data;
   bool _loadingCard = false;
 
@@ -160,15 +129,12 @@ class _EmployeeCardScreenState extends State<EmployeeCardScreen> {
         setState(() {
           _card = EmpCardData.fromCardInfo(
             info,
-            // Neither department nor vendor is on the card endpoint; keep
-            // whatever the caller already knew rather than dropping the rows.
             department: widget.data.department,
             vendor: widget.data.vendor,
           );
         });
       }
     } catch (e) {
-      // The snapshot already on screen stays — a missing QR beats no card.
       log('employee id card fetch failed: $e');
     } finally {
       if (mounted) setState(() => _loadingCard = false);
@@ -306,7 +272,6 @@ class _EmployeeCardScreenState extends State<EmployeeCardScreen> {
     );
   }
 
-  // ── PDF export ─────────────────────────────────────────────────────────────
   Future<void> _export({required bool share}) async {
     setState(() => _busy = true);
     try {
@@ -340,13 +305,6 @@ class _EmployeeCardScreenState extends State<EmployeeCardScreen> {
 }
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// On-screen card
-//
-// Layout: company band across the top, a narrow left rail holding the photo
-// with the QR directly beneath it, the identity block on the right, and a
-// footer band captioned EMPLOYEE ID CARD.
-// ═════════════════════════════════════════════════════════════════════════════
 class EmpIdCard extends StatelessWidget {
   final EmpCardData data;
   const EmpIdCard({super.key, required this.data});
@@ -361,9 +319,6 @@ class EmpIdCard extends StatelessWidget {
       aspectRatio: kCardRatio,
       child: LayoutBuilder(
         builder: (context, box) {
-          // Every size below is a multiple of 1% of the card width, so the
-          // design holds together at any screen size instead of only looking
-          // right on one phone.
           final u = box.maxWidth / 100;
           return Container(
             decoration: BoxDecoration(
@@ -404,8 +359,6 @@ class EmpIdCard extends StatelessWidget {
       ),
       child: Row(children: [
         if (hasLogo) ...[
-          // White plate behind the logo: company marks are drawn for light
-          // backgrounds and disappear straight onto the navy band.
           Container(
             height: 7 * u,
             width: 7 * u,
@@ -462,8 +415,7 @@ class EmpIdCard extends StatelessWidget {
     );
   }
 
-  /// Photo on top, QR directly beneath — both the same width so the rail reads
-  /// as one column rather than two stacked odds and ends.
+
   Widget _rail(double u) {
     const railW = 16.5;
     return SizedBox(
@@ -495,7 +447,6 @@ class EmpIdCard extends StatelessWidget {
             : null);
     return Container(
       width: railW * u,
-      // Passport proportions (3:4) at the smaller rail width.
       height: railW * 4 / 3 * u,
       decoration: BoxDecoration(
         color: empSurfaceColor,
@@ -608,12 +559,6 @@ class EmpIdCard extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// PDF card — one page, cut to the real CR80 size
-//
-// Mirrors [EmpIdCard] proportion for proportion, so the printed card is the
-// one you previewed. Sizes are PDF points against an 85.6mm-wide page.
-// ═════════════════════════════════════════════════════════════════════════════
 class EmployeeCardPdf {
   static const PdfColor _blue = PdfColor.fromInt(0xFF5B6CF6);
   static const PdfColor _ink = PdfColor.fromInt(0xFF1E2235);
@@ -649,8 +594,6 @@ class EmployeeCardPdf {
       ),
     );
 
-    // Slug the name so two cards never collide and the file is recognisable
-    // in the Downloads list.
     final slug = data.name
         .toLowerCase()
         .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
