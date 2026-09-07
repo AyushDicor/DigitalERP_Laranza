@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 // import 'package:digitalerp/screen/base/base_controller.dart';
 // import 'package:digitalerp/screen/ui/home/order/order_detail/order_detail_controller.dart';
 // import 'package:digitalerp/screen/ui/home/order/order_detail/order_detail_edit/order_detail_edit_dialog.dart';
@@ -426,36 +427,31 @@ class OrderDetailView extends StatelessWidget {
 
                     //  Action buttons 
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (controller.orderController.isManager)
-                          _actionButton(
-                            icon: Icons.edit_outlined,
-                            label: 'Edit',
-                            color: const Color(0xFFF39C12),
-                            bg: const Color(0xFFFFF4E0),
-                            onTap: () => Get.dialog(OrderDetailEditDialog())
-                                .then((_) => Future.delayed(
-                                    const Duration(milliseconds: 200),
-                                    controller.getOrderDetail)),
+                        if (controller.orderController.isManager) ...[
+                          Expanded(
+                            child: _actionButton(
+                              icon: Icons.edit_outlined,
+                              label: 'Change Status',
+                              primary: false,
+                              onTap: () => Get.dialog(OrderDetailEditDialog())
+                                  .then((_) => Future.delayed(
+                                      const Duration(milliseconds: 200),
+                                      controller.getOrderDetail)),
+                            ),
                           ),
-                        if (controller.orderController.isManager)
-                          const SizedBox(width: 16),
-                        Obx(() => controller.isPressed.value
-                            ? const SizedBox(
-                                width: 52,
-                                height: 52,
-                                child: Center(
-                                    child: CircularProgressIndicator(
-                                        color: newBlueColor)))
-                            : _actionButton(
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: Obx(() => _actionButton(
                                 icon: Icons.share_outlined,
-                                label: 'Share',
-                                color: const Color(0xFF5B5FC7),
-                                bg: const Color(0xFFEEF0FF),
+                                label: 'Share PDF',
+                                primary: true,
+                                busy: controller.isPressed.value,
                                 onTap: () =>
                                     controller.getAndShareOrderDetailPdf(),
                               )),
+                        ),
                       ],
                     ),
                   ],
@@ -621,15 +617,29 @@ class OrderDetailView extends StatelessWidget {
                       color: newTextPrimary),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 10),
+              const SizedBox(height: 4),
+              Text(
+                '${_qty(item.quantity)} ${item.unit ?? ''}  ×  '
+                '${_money(item.rate)}',
+                style: const TextStyle(
+                    fontSize: 11.5, color: newTextSecondary),
+              ),
+              const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  _statChip('Qty', item.quantity.toString()),
-                  _statChip('Unit', item.unit.toString()),
-                  _statChip('Rate', '₹${item.rate}'),
-                  _statChip('Amount', '₹${item.amount}',
-                      valueColor: const Color(0xFF27AE60)),
+                  _statChip('Qty', _qty(item.quantity)),
+                  _statChip('Rate', _money(item.rate)),
+
+                  /// Computed, not taken from the response. The API returns
+                  /// `amount` equal to the *quantity* (qty 1, rate 400 came
+                  /// back as amount 1), so the line total has to be derived.
+                  _statChip(
+                    'Amount',
+                    _money((item.quantity ?? 0) * (item.rate ?? 0)),
+                    valueColor: newGreenColor,
+                  ),
                 ],
               ),
             ]),
@@ -675,41 +685,75 @@ class OrderDetailView extends StatelessWidget {
         bg = const Color(0xFFFFF4E0);
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
-      child: Text('Status: $status',
-          style: TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 8,
+            width: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Text(status,
+              style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: color)),
+        ],
+      ),
     );
   }
+
+  /// 1.0 -> "1", 1.5 -> "1.5"
+  static String _qty(num? value) {
+    final v = (value ?? 0).toDouble();
+    return v % 1 == 0 ? v.toInt().toString() : v.toString();
+  }
+
+  static final NumberFormat _inr = NumberFormat('#,##,##0.00', 'en_IN');
+
+  static String _money(num? value) => '₹${_inr.format(value ?? 0)}';
 
   Widget _actionButton({
     required IconData icon,
     required String label,
-    required Color color,
-    required Color bg,
+    required bool primary,
     required VoidCallback onTap,
+    bool busy = false,
   }) {
+    final fg = primary ? Colors.white : newBlueColor;
     return GestureDetector(
-      onTap: onTap,
+      onTap: busy ? null : onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        height: 48,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          color: primary ? newBlueColor : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: primary ? newBlueColor : newBorderColor),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 8),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w600, color: color)),
-        ]),
+        child: busy
+            ? SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+              )
+            : Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(icon, color: fg, size: 18),
+                const SizedBox(width: 8),
+                Text(label,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: fg)),
+              ]),
       ),
     );
   }

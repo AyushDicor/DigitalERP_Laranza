@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-//  New Figma Design System 
+/// Whether selecting a customer must pass the server-side geo-fence
+/// (`checkuserlocation/validateuserlocation`).
+///
+/// Disabled because no party in the ERP has coordinates stored yet — the
+/// endpoint answers "Please Update Party Location" for every party, which made
+/// it impossible to select a customer or place any order at all.
+///
+/// Flip back to `true` once party locations are populated; nothing else needs
+/// to change.
+const bool kEnforcePartyGeofence = false;
+
+//  New Figma Design System
 const Color newBlueColor        = Color(0xFF5B6CF6); // Primary CTA
 final Color newBlueLightColor   = const Color(0xFF5B6CF6).withValues(alpha: 0.10); // Light blue bg
 const Color newSurfaceColor     = Color(0xFFF8FAFC); // Input / card bg

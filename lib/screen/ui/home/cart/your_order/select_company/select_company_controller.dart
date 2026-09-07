@@ -2,6 +2,7 @@ import 'package:digitalerp/app_routes/app_routes.dart';
 import 'package:digitalerp/response/get_executive_dropdown_response.dart';
 import 'package:digitalerp/screen/base/base_controller.dart';
 import 'package:digitalerp/screen/ui/home/cart/your_order/your_order_controller.dart';
+import 'package:digitalerp/utils/app_constant_new.dart';
 import 'package:digitalerp/utils/show_message.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -40,15 +41,36 @@ class SelectCompanyController extends AppBaseController {
   void onInit() async{
     // TODO: implement onInit
     getPartyList();
-    currentPosition = await getUserCurrentPosition();
+
+    /// Only needed for the geo-fence. Also wrapped because
+    /// getUserCurrentPosition returns a Future.error when location is off,
+    /// which in this un-guarded async onInit became an unhandled error.
+    if (kEnforcePartyGeofence) {
+      try {
+        currentPosition = await getUserCurrentPosition();
+      } catch (_) {
+        currentPosition = null;
+      }
+    }
     super.onInit();
 
   }
 
   void tapOnCard(int index) {
     searchFocus.unfocus();
-    // selectedIndexValue = companyList[index];
     update();
+
+    /// Geo-fence disabled — see [kEnforcePartyGeofence]. No party in the ERP
+    /// has coordinates, so the check rejected every customer.
+    if (!kEnforcePartyGeofence) {
+      if (index < 0 || index >= filteredList.length) return;
+      yourOrderController.selectCompany = filteredList[index];
+      yourOrderController.persistSelectedParty();
+      yourOrderController.update();
+      update();
+      backTap();
+      return;
+    }
 
     checkCompanyLatLng(index);
 

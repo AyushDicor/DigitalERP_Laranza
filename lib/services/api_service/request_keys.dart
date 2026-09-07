@@ -23,6 +23,17 @@ class RequestKeys {
   static const String branchId = 'branchid';
   static const String itemId = 'itemid';
   static const String itemRate = 'itemrate';
+
+  /// Sent to `addtocartwithnetrate`, which takes a JSON body with numeric
+  /// values (unlike the form-encoded cart calls).
+  ///
+  /// Roles verified against the live endpoint:
+  ///   [netRate]             the rate charged, BEFORE the line discount —
+  ///                         this is what the cart totals on.
+  ///   [itemDiscountPercent] applied by the SERVER; never pre-apply it.
+  ///   [itemRate]            the list price / MRP, stored for the record only.
+  static const String netRate = 'netrate';
+  static const String itemDiscountPercent = 'discountpercent';
   static const String quantity = 'quantity';
   static const String unitId = 'unitid';
   static const String leaveStatus = 'leavestatus';

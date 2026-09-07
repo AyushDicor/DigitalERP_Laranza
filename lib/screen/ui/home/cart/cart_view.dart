@@ -481,9 +481,24 @@ import 'package:digitalerp/response/get_cart_list_response.dart';
 import 'package:digitalerp/screen/base/base_controller.dart';
 import 'package:digitalerp/screen/ui/home/cart/cart_controller.dart';
 import 'package:digitalerp/utils/app_constant.dart';
+import 'package:digitalerp/utils/order_line_pricing.dart';
+import 'package:intl/intl.dart';
 import 'package:digitalerp/utils/app_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
+/// Indian lakh grouping with paise. Line rates now carry decimals because of
+/// per-item discounts, so the old `.toInt()` formatting silently dropped them.
+final NumberFormat _inrFmt = NumberFormat('#,##,##0.00', 'en_IN');
+
+String _money(num? value) => '₹${_inrFmt.format(value ?? 0)}';
+
+/// 87.878... -> "87.88", 10.0 -> "10"
+String _trimPct(double value) {
+  final rounded = (value * 100).roundToDouble() / 100;
+  return rounded % 1 == 0 ? rounded.toInt().toString() : rounded.toString();
+}
+
 
 class CartView extends StatelessWidget {
   const CartView({Key? key}) : super(key: key);
@@ -708,20 +723,40 @@ class _CartCard extends StatelessWidget {
                   const SizedBox(height: 6),
 
                   // Price
-                  Text(
-                    '\u20B9${item.total?.toInt()}',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A2E),
+                  //
+                  // Was `total.toInt()` labelled "per unit" \u2014 it is the line
+                  // total, not a unit price, and truncating it dropped the
+                  // paise that per-line discounts now produce.
+                  if (_breakdownText(controller, item) != null) ...[
+                    Text(
+                      _breakdownText(controller, item)!,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                  ],
                   Text(
-                    'per unit',
+                    '${_qtyText(item.quantity)} ${item.unit ?? ''}'
+                    '  \u00D7  ${_money(item.itemrate)}',
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade500,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: _breakdownText(controller, item) != null
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: _breakdownText(controller, item) != null
+                          ? const Color(0xFF10B981)
+                          : Colors.grey.shade500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _money(item.total),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1A1A2E),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -741,6 +776,43 @@ class _CartCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// "MRP ₹1,650.00   Net ₹200.00   Disc 10%", or null when the line was
+  /// simply charged at MRP.
+  ///
+  /// Prefers the exact split recorded when the line was added; otherwise falls
+  /// back to the server's MRP, which is available for every line regardless of
+  /// where or when it was added.
+  String? _breakdownText(CartController controller, GetCartListData item) {
+    final charged = (item.itemrate ?? 0).toDouble();
+    final mrp = controller.bestMrpFor(item);
+    final exact = controller.pricingFor(item.productid, item.itemrate);
+
+    final chargedAtMrp = (mrp - charged).abs() < 0.01;
+    final noDiscount = exact == null || exact.discountPercent <= 0;
+    if (chargedAtMrp && noDiscount) return null;
+
+    final parts = <String>[];
+    if (mrp > 0) parts.add('MRP ${_money(mrp)}');
+
+    if (exact != null) {
+      if ((exact.netRate - mrp).abs() > 0.01) {
+        parts.add('Net ${_money(exact.netRate)}');
+      }
+      if (exact.discountPercent > 0) {
+        parts.add('Disc ${_trimPct(exact.discountPercent)}%');
+      }
+    } else if (!chargedAtMrp) {
+      parts.add('Rate ${_money(charged)}');
+    }
+
+    return parts.isEmpty ? null : parts.join('   ');
+  }
+
+  static String _qtyText(double? qty) {
+    final q = qty ?? 0;
+    return q % 1 == 0 ? q.toInt().toString() : q.toString();
   }
 
   void _showDeleteDialog(CartController controller, int index) {
@@ -933,6 +1005,7 @@ class _OrderSummary extends StatelessWidget {
         .fold<double>(0, (sum, item) => sum + (item.total ?? 0));
     const deliveryCharge = 0.0;
     final total = subtotal + deliveryCharge;
+    final totals = controller.totals;
 
     return Container(
       decoration: const BoxDecoration(
@@ -950,17 +1023,34 @@ class _OrderSummary extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _summaryRow('Subtotal', '\u20B9${subtotal.toInt()}',
-              bold: false),
+          /// MRP and discount rows appear only when the lines were actually
+          /// priced below list.
+          if (totals.isBelowMrp) ...[
+            _summaryRow('Total MRP', _money(totals.mrpTotal), bold: false),
+            const SizedBox(height: 8),
+          ],
+          if (totals.hasRateOverride && totals.hasDiscount) ...[
+            _summaryRow('Net Amount', _money(totals.netTotal), bold: false),
+            const SizedBox(height: 8),
+          ],
+          if (totals.hasDiscount) ...[
+            _summaryRow(
+              'Discount (${_trimPct(totals.discountPercent)}%)',
+              '− ${_money(totals.discountAmount)}',
+              bold: false,
+              valueColor: const Color(0xFF10B981),
+            ),
+            const SizedBox(height: 8),
+          ],
+          _summaryRow('Subtotal', _money(subtotal), bold: false),
           const SizedBox(height: 8),
-          _summaryRow('Delivery charge',
-              deliveryCharge == 0 ? '\u20B90' : '\u20B9${deliveryCharge.toInt()}',
+          _summaryRow('Delivery charge', _money(deliveryCharge),
               bold: false),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 10),
             child: Divider(height: 1, color: Color(0xFFEEEEEE)),
           ),
-          _summaryRow('Total', '\u20B9${total.toInt()}', bold: true),
+          _summaryRow('Total', _money(total), bold: true),
           const SizedBox(height: 16),
 
           // Place Order button
@@ -991,7 +1081,8 @@ class _OrderSummary extends StatelessWidget {
     );
   }
 
-  Widget _summaryRow(String label, String value, {required bool bold}) {
+  Widget _summaryRow(String label, String value,
+      {required bool bold, Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1008,10 +1099,11 @@ class _OrderSummary extends StatelessWidget {
           style: TextStyle(
             fontSize: bold ? 16 : 14,
             fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-            color: const Color(0xFF1A1A2E),
+            color: valueColor ?? const Color(0xFF1A1A2E),
           ),
         ),
       ],
     );
   }
+
 }

@@ -335,75 +335,205 @@ class QuickOrderView extends StatelessWidget {
           color: isPicked ? newBlueColor.withValues(alpha: 0.45) : newBorderColor,
         ),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: AppNetworkImage(
-              image: item.itemimage,
-              height: 52,
-              width: 52,
-              fit: BoxFit.cover,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  item.itemname ?? '',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: newTextPrimary,
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: AppNetworkImage(
+                  image: item.itemimage,
+                  height: 52,
+                  width: 52,
+                  fit: BoxFit.cover,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  'Code: ${item.itemcode ?? '-'}   |   ${item.unit ?? ''}',
-                  style: const TextStyle(
-                      fontSize: 11, color: newTextSecondary),
-                ),
-                const SizedBox(height: 3),
-                Row(
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _money(item.rate ?? 0),
+                      item.itemname ?? '',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: newBlueColor,
+                        color: newTextPrimary,
                       ),
                     ),
-                    if (isPicked) ...[
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          '= ${_money((item.rate ?? 0) * qty)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: newGreenColor,
-                          ),
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 3),
+                    Text(
+                      'Code: ${item.itemcode ?? '-'}   |   ${item.unit ?? ''}',
+                      style: const TextStyle(
+                          fontSize: 11, color: newTextSecondary),
+                    ),
+                    const SizedBox(height: 3),
+                    _rateSummary(ctrl, item, qty, isPicked),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              _qtyStepper(ctrl, item, qty),
+            ],
           ),
-          const SizedBox(width: 8),
-          _qtyStepper(ctrl, item, qty),
+          const SizedBox(height: 10),
+          _pricingRow(ctrl, item),
         ],
       ),
+    );
+  }
+
+  /// MRP is shown exactly as the server sent it and never changes — the
+  /// effective rate is added beside it only when a Net Rate or discount has
+  /// been entered.
+  Widget _rateSummary(QuickOrderController ctrl, ProductDataList item,
+      double qty, bool isPicked) {
+    final mrp = ctrl.mrpOf(item);
+    final finalRate = ctrl.finalRateOf(item);
+    final changed = (finalRate - mrp).abs() > 0.001;
+
+    return Row(
+      children: [
+        Text(
+          'MRP ${_money(mrp)}',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: changed ? FontWeight.w500 : FontWeight.w700,
+            color: changed ? newTextSecondary : newBlueColor,
+          ),
+        ),
+        if (changed) ...[
+          const SizedBox(width: 6),
+          Text(
+            '→ ${_money(finalRate)}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: newBlueColor,
+            ),
+          ),
+        ],
+        if (isPicked) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              '= ${_money(finalRate * qty)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: newGreenColor,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Net Rate and Discount % for this line.
+  ///
+  /// Net Rate replaces the item-master rate, then Discount % comes off the Net
+  /// Rate — the two are independent, so a line can be repriced, discounted, or
+  /// both.
+  Widget _pricingRow(QuickOrderController ctrl, ProductDataList item) {
+    return Row(
+      children: [
+        Expanded(
+          child: _pricingField(
+            label: 'Net Rate',
+
+            /// Always hints '0', never the MRP — the box is for a rate the
+            /// user chooses to override with, and echoing the MRP made an
+            /// untouched line look as though it had been priced.
+            /// Left empty, the line still prices at MRP.
+            hint: '0',
+            controller: ctrl.rateCtrl(item),
+            onChanged: (v) => ctrl.onNetRateTyped(item, v),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _pricingField(
+            label: 'Discount %',
+            suffix: '%',
+            hint: '0',
+            controller: ctrl.discCtrl(item),
+            onChanged: (v) => ctrl.onDiscountTyped(item, v),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _pricingField({
+    required String label,
+    required TextEditingController controller,
+    required ValueChanged<String> onChanged,
+    String? suffix,
+    String? hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: newTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 36,
+          child: TextField(
+            controller: controller,
+            onChanged: onChanged,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+            ],
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: newTextPrimary,
+            ),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: hint,
+              hintStyle: const TextStyle(color: newTextHint, fontSize: 13),
+              suffixText: suffix,
+              suffixStyle:
+                  const TextStyle(color: newTextSecondary, fontSize: 12),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: newBorderColor),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: newBorderColor),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: newBlueColor, width: 1.5),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

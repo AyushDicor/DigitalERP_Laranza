@@ -212,6 +212,50 @@ class AppBaseController extends GetxController {
     }
   }
 
+  /// Adds a cart line together with the pricing behind its rate.
+  ///
+  /// [itemRate] is the product's MRP — a record of the list price, it does not
+  /// drive any total. [netRate] is the rate actually charged, BEFORE the line
+  /// discount, and is what the cart totals on. [discountPercent] is applied by
+  /// the server, so it must never be pre-applied to [netRate].
+  Future<AddToCartResponse> callAddToCartWithNetRate({
+    required int itemId,
+    required double itemRate,
+    required double netRate,
+    required double discountPercent,
+    required double quantity,
+    required int unitId,
+  }) async {
+    try {
+      UserData? currentUserData = await userDataController.getUserData;
+
+      /// Numeric values, not strings — this endpoint takes a JSON body.
+      Map<String, dynamic> body = {
+        RequestKeys.userId: currentUserData?.userid ?? 0,
+        RequestKeys.compId: currentUserData?.compId ?? 0,
+        RequestKeys.itemId: itemId,
+        RequestKeys.itemRate: itemRate,
+
+        /// Whole quantities go as a JSON integer (`5`, not `5.0`). Rates bind
+        /// correctly as floats, but quantity has come back stored as 0, and a
+        /// float-to-int binding failure is the one cause we can rule out from
+        /// this side. Fractional quantities still go as a decimal.
+        RequestKeys.quantity:
+            quantity % 1 == 0 ? quantity.toInt() : quantity,
+        RequestKeys.unitId: unitId,
+        RequestKeys.netRate: netRate,
+        RequestKeys.itemDiscountPercent: discountPercent,
+      };
+      return await api.addToCartWithNetRate(body);
+    } catch (e) {
+      return AddToCartResponse(
+          status: 500,
+          message: "Something went wrong.Please try again after sometime.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   Future<AddToCartResponse> callAddToCart({
     required String itemId,
     required String itemRate,

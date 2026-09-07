@@ -7,6 +7,7 @@ import 'package:digitalerp/screen/base/base_controller.dart';
 import 'package:digitalerp/screen/ui/home/home_controller.dart';
 import 'package:digitalerp/services/api_service/request_keys.dart';
 import 'package:digitalerp/utils/offline_cart_list.dart';
+import 'package:digitalerp/utils/order_line_pricing.dart';
 import 'package:digitalerp/utils/shared_pre.dart';
 import 'package:digitalerp/utils/show_message.dart';
 import 'package:flutter/material.dart';
@@ -31,14 +32,51 @@ class CartController extends AppBaseController {
   /// uninitialized and made [tapOnDelete] throw before it reached the API.
   List<OfflineCart> list = [];
 
+  /// How each line was priced on the order-entry screen (MRP, Net Rate,
+  /// discount), keyed by item id. The cart API returns only the final rate, so
+  /// this local mirror is what lets the cart show the calculation.
+  Map<int, OrderLinePricing> linePricing = {};
+
+  OrderLinePricing? pricingFor(int? productId, double? serverRate) =>
+      OrderLinePricingStore.resolve(linePricing, productId, serverRate);
+
+  /// List price for a line: the branch rate recorded when it was added. See
+  /// [YourOrderController.bestMrpFor] for why `productdetail` is not used.
+  double bestMrpFor(GetCartListData item) {
+    final exact = pricingFor(item.productid, item.itemrate);
+    if (exact != null && exact.mrp > 0) return exact.mrp;
+    return (item.itemrate ?? 0).toDouble();
+  }
+
+  /// Net Rate for a line, or the charged rate when nothing was recorded.
+  double bestNetRateFor(GetCartListData item) {
+    final exact = pricingFor(item.productid, item.itemrate);
+    if (exact != null) return exact.netRate;
+    return (item.itemrate ?? 0).toDouble();
+  }
+
+  OrderTotals get totals => OrderTotals.from<GetCartListData>(
+        lines: cartList,
+        mrpOfLine: bestMrpFor,
+        netRateOf: bestNetRateFor,
+        chargedRateOf: (e) => (e.itemrate ?? 0).toDouble(),
+        quantityOf: (e) => (e.quantity ?? 0).toDouble(),
+      );
+
   init() async {
     // TODO: implement onInit
     var obj = SharedPre.getObjs(SharedPre.userData) ?? {};
     currentUserData = UserData.fromJson(obj);
     getDetails();
     getOfflineList();
-
+    _loadLinePricing();
   }
+
+  Future<void> _loadLinePricing() async {
+    linePricing = await OrderLinePricingStore.load();
+    update();
+  }
+
   @override
   void onInit() {
     // TODO: implement onInit
@@ -137,6 +175,7 @@ class CartController extends AppBaseController {
     }
 
     await SharedPre.clear(SharedPre.offlineCartList);
+    await OrderLinePricingStore.clear();
     list = [];
     isClearingCart = false;
     await getDetails();
@@ -284,7 +323,14 @@ class CartController extends AppBaseController {
       body[RequestKeys.userId] = currentUserData!.userid.toString();
       var res = await api.getCartList(body);
       if (res.status == 200) {
-        cartList = res.data ?? [];
+        /// An empty cart comes back as ONE blank placeholder row
+        /// (`id: 0, productid: 0, productname: ""`) rather than an empty
+        /// array. Taken at face value that renders a phantom ₹0.00 item,
+        /// reports "Items (1)" at checkout and enables Place Order on an
+        /// empty cart.
+        cartList = (res.data ?? [])
+            .where((e) => (e.id ?? 0) > 0 && (e.productid ?? 0) > 0)
+            .toList();
         cartListLength = cartList.length;
         SharedPre.setValue(SharedPre.cartListLength, cartListLength);
       } else {

@@ -25,6 +25,8 @@ class SharedPre {
   /// Company chosen on the Quick Order screen, handed to checkout so Your
   /// Order can pre-fill Select Company. The server cart is not party-scoped.
   static const quickOrderParty = 'quickOrderParty';
+  /// Per-line MRP & discount mirror for the cart; see order_line_pricing.dart.
+  static const orderLinePricing = 'orderLinePricing';
   static const  unApprovalCount = 'unApprovalCount';
   static const String currentBranchId = 'currentBranchId';        // ✅ Add this
   static const String currentBranchName = 'currentBranchName';

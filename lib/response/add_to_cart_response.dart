@@ -23,10 +23,33 @@ class AddToCartResponse {
 
   factory AddToCartResponse.fromJson(Map<String, dynamic> json) => AddToCartResponse(
     success: json["success"],
-    data: json["data"] == null ? null : List<AddToCartData>.from(json["data"].map((x) => AddToCartData.fromJson(x))),
+    data: _parseData(json["data"]),
     message: json["message"],
     status: json["status"],
   );
+
+  /// `addtocartnew` returns `data` as a list; `addtocartwithnetrate` documents
+  /// it as an object. Both are accepted, because a parse failure here would
+  /// report a *successful* add as failed — and on an additive endpoint that
+  /// invites a retry which silently doubles the quantity.
+  static List<AddToCartData>? _parseData(dynamic raw) {
+    if (raw == null) return null;
+    try {
+      if (raw is List) {
+        return raw
+            .whereType<Map<String, dynamic>>()
+            .map(AddToCartData.fromJson)
+            .toList();
+      }
+      if (raw is Map<String, dynamic>) {
+        return raw.isEmpty ? <AddToCartData>[] : [AddToCartData.fromJson(raw)];
+      }
+    } catch (_) {
+      /// Shape we do not recognise — the caller falls back to re-reading the
+      /// cart count rather than treating the add as failed.
+    }
+    return null;
+  }
 
   Map<String, dynamic> toJson() => {
     "success": success,

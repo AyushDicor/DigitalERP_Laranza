@@ -136,6 +136,10 @@ class ApiMethods {
   //String addToCart  = 'addtocart/addcart';
   String addToCart = 'addtocartnew/addcartnew';
 
+  /// Newer add-to-cart that also carries the line's Net Rate and discount.
+  /// Single-segment route, unlike the older controller/action pairs.
+  String addToCartWithNetRate = 'addtocartwithnetrate';
+
   String removeFromCart       = 'removeitem/removecartitem';
   String removeItem           = 'removeitem/removecartitem';
   String placeOrder           = 'placeorder/orderentry';

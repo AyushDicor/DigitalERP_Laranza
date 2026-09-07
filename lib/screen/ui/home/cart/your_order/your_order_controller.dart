@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:digitalerp/app_routes/app_routes.dart';
 import 'package:digitalerp/response/customer_detail_response.dart';
+import 'package:digitalerp/response/get_cart_list_response.dart';
 import 'package:digitalerp/response/get_executive_dropdown_response.dart';
 import 'package:digitalerp/response/party_dropdown_list_response.dart';
 import 'package:digitalerp/response/visit_plan_detail_data_response.dart';
@@ -11,6 +12,7 @@ import 'package:digitalerp/screen/ui/home/home_controller.dart';
 import 'package:digitalerp/screen/ui/home/order/order_controller.dart';
 import 'package:digitalerp/services/api_service/request_keys.dart';
 import 'package:digitalerp/utils/app_constant.dart';
+import 'package:digitalerp/utils/order_line_pricing.dart';
 import 'package:digitalerp/utils/shared_pre.dart';
 import 'package:digitalerp/utils/show_message.dart';
 import 'package:flutter/cupertino.dart';
@@ -39,6 +41,13 @@ class YourOrderController extends AppBaseController {
   String? companyName;
   String? partyId;
 
+  /// How each cart line was priced on the order-entry screen, keyed by item
+  /// id. Local mirror — the cart API returns only the final rate.
+  Map<int, OrderLinePricing> linePricing = {};
+
+  OrderLinePricing? pricingFor(int? productId, double? serverRate) =>
+      OrderLinePricingStore.resolve(linePricing, productId, serverRate);
+
   double subTotal = 0.0;
   double grandTotal = 0.0;
 
@@ -61,6 +70,7 @@ class YourOrderController extends AppBaseController {
     /// Seed the totals from the cart so the summary and the Place Order button
     /// show real figures before the user touches either discount field.
     recalculate();
+    _loadLinePricing();
 
     super.onInit();
   }
@@ -117,6 +127,43 @@ class YourOrderController extends AppBaseController {
     Get.toNamed(AppRoutes.selectCompany)?.then((value) => update());
   }
 
+  Future<void> _loadLinePricing() async {
+    linePricing = await OrderLinePricingStore.load();
+    update();
+  }
+
+  /// List price for a line: the branch rate the user saw on the order screen,
+  /// recorded when the line was added.
+  ///
+  /// Deliberately does NOT use `productdetail/getproductdetail`. That endpoint
+  /// takes no branch and returns a different company-level column whose
+  /// meaning is unconfirmed — for item 256776 it reports 473 while the branch
+  /// sells at 614, so it is not an MRP and must not be presented as one.
+  ///
+  /// Falls back to the charged rate when no list price is known, so an unknown
+  /// item contributes no phantom discount.
+  double bestMrpFor(GetCartListData item) {
+    final exact = pricingFor(item.productid, item.itemrate);
+    if (exact != null && exact.mrp > 0) return exact.mrp;
+    return (item.itemrate ?? 0).toDouble();
+  }
+
+  /// Net Rate for a line, or the charged rate when nothing was recorded — so
+  /// an unknown line shows no phantom discount.
+  double bestNetRateFor(GetCartListData item) {
+    final exact = pricingFor(item.productid, item.itemrate);
+    if (exact != null) return exact.netRate;
+    return (item.itemrate ?? 0).toDouble();
+  }
+
+  OrderTotals get totals => OrderTotals.from<GetCartListData>(
+        lines: cartController.cartList,
+        mrpOfLine: bestMrpFor,
+        netRateOf: bestNetRateFor,
+        chargedRateOf: (e) => (e.itemrate ?? 0).toDouble(),
+        quantityOf: (e) => (e.quantity ?? 0).toDouble(),
+      );
+
   /// Mirrors the customer back into storage so a change made here and the one
   /// made on the Quick Order screen cannot disagree.
   void persistSelectedParty() {
@@ -170,6 +217,7 @@ class YourOrderController extends AppBaseController {
       var res = await api.orderPlace(body);
       if (res.status == 200) {
         SharedPre.clear(SharedPre.quickOrderParty);
+        OrderLinePricingStore.clear();
         homeController.itemInCart.value = 0;
         Get.offAllNamed(AppRoutes.orderPlaced);
       } else {

@@ -10,6 +10,7 @@ import 'package:digitalerp/screen/base/base_controller.dart';
 import 'package:digitalerp/screen/ui/home/home_controller.dart';
 import 'package:digitalerp/services/api_service/request_keys.dart';
 import 'package:digitalerp/utils/app_constant_new.dart';
+import 'package:digitalerp/utils/order_line_pricing.dart';
 import 'package:digitalerp/utils/shared_pre.dart';
 import 'package:digitalerp/utils/show_message.dart';
 import 'package:flutter/material.dart';
@@ -25,9 +26,31 @@ class PickedItem {
   final String brandName;
   double qty;
 
-  PickedItem({required this.item, required this.brandName, required this.qty});
+  /// Rate actually charged before the line discount. Defaults to the item
+  /// master rate but is editable per line, because a salesperson may need to
+  /// quote a different price than the master carries.
+  double netRate;
 
-  double get lineTotal => (item.rate ?? 0) * qty;
+  /// Line discount, applied on top of [netRate].
+  double discountPercent;
+
+  PickedItem({
+    required this.item,
+    required this.brandName,
+    required this.qty,
+    required this.netRate,
+    required this.discountPercent,
+  });
+
+  /// What the customer pays per unit, and what is sent to the cart as
+  /// `itemrate` — the cart stores no discount column, so the discount has to
+  /// be folded into the rate.
+  double get finalRate {
+    final pct = discountPercent.clamp(0, 100).toDouble();
+    return netRate - (netRate * pct / 100);
+  }
+
+  double get lineTotal => finalRate * qty;
 }
 
 /// Single-screen order entry: Company + Brand pickers on top, category chips,
@@ -72,6 +95,59 @@ class QuickOrderController extends AppBaseController {
   /// rebuilds — recreating a controller inside `build` resets the cursor on
   /// every keystroke, which makes multi-digit entry impossible.
   final Map<int, TextEditingController> _qtyCtrls = {};
+  final Map<int, TextEditingController> _rateCtrls = {};
+  final Map<int, TextEditingController> _discCtrls = {};
+
+  /// Per-line pricing overrides, keyed by item id. Held separately from
+  /// [picked] so a rate typed before any quantity is not lost, and so both
+  /// survive switching category chips or brands.
+  final Map<int, double> _netRates = {};
+  final Map<int, double> _discounts = {};
+
+  /// The item-master price, exactly as the server sent it. Never altered by
+  /// anything typed on this screen.
+  double mrpOf(ProductDataList item) => (item.rate ?? 0).toDouble();
+
+  /// The rate the line is priced at: the typed Net Rate when one has been
+  /// entered, otherwise the MRP. Leaving the field empty means "use the MRP",
+  /// which is why an empty box clears the override rather than setting 0.
+  double netRateOf(ProductDataList item) =>
+      _netRates[item.itemid] ?? mrpOf(item);
+
+  bool hasNetRateOverride(int? itemId) => _netRates.containsKey(itemId);
+
+  double discountOf(int? itemId) => _discounts[itemId] ?? 0;
+
+  /// Net rate less the line discount — the figure that reaches the cart.
+  double finalRateOf(ProductDataList item) {
+    final net = netRateOf(item);
+    final pct = discountOf(item.itemid).clamp(0, 100).toDouble();
+    return net - (net * pct / 100);
+  }
+
+  /// Starts empty, with the MRP shown as the hint. Pre-filling it with the MRP
+  /// made an untouched line look edited, and clearing it then read as a rate
+  /// of 0 instead of "fall back to MRP".
+  TextEditingController rateCtrl(ProductDataList item) {
+    final id = item.itemid ?? -1;
+    return _rateCtrls.putIfAbsent(id, () {
+      final override = _netRates[id];
+      return TextEditingController(
+          text: override == null ? '' : fmtMoney(override));
+    });
+  }
+
+  TextEditingController discCtrl(ProductDataList item) {
+    final id = item.itemid ?? -1;
+    return _discCtrls.putIfAbsent(id, () {
+      final d = discountOf(id);
+      return TextEditingController(text: d == 0 ? '' : fmtQty(d));
+    });
+  }
+
+  /// Trims a trailing `.0` but keeps real paise.
+  static String fmtMoney(double value) =>
+      value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(2);
 
   /// GetBuilder ids so typing only repaints the row being typed in and the
   /// bottom bar, instead of the whole product list.
@@ -90,6 +166,10 @@ class QuickOrderController extends AppBaseController {
   /// Trims the pointless `.0` off whole numbers.
   static String fmtQty(double qty) =>
       qty % 1 == 0 ? qty.toInt().toString() : qty.toString();
+
+  /// Keeps paise but drops binary-float noise (552.5999999 -> 552.6) before
+  /// the value goes over the wire as a JSON number.
+  static double _round2(double v) => (v * 100).roundToDouble() / 100;
 
   /// Guards the bulk push. The add-to-cart endpoint is *additive* server-side
   /// (calling it twice for an item adds to its quantity rather than setting
@@ -119,10 +199,16 @@ class QuickOrderController extends AppBaseController {
   @override
   void onClose() {
     searchController.dispose();
-    for (final c in _qtyCtrls.values) {
+    for (final c in [
+      ..._qtyCtrls.values,
+      ..._rateCtrls.values,
+      ..._discCtrls.values,
+    ]) {
       c.dispose();
     }
     _qtyCtrls.clear();
+    _rateCtrls.clear();
+    _discCtrls.clear();
     super.onClose();
   }
 
@@ -166,7 +252,11 @@ class QuickOrderController extends AppBaseController {
   /// Picks up the device position once on entry so selecting a company does
   /// not have to wait on a GPS fix. Failures are swallowed here and retried at
   /// selection time, where the user can be told what to fix.
+  ///
+  /// Skipped entirely while the geo-fence is off, so the screen does not ask
+  /// for a location permission it has no use for.
   Future<void> _resolveCurrentPosition() async {
+    if (!kEnforcePartyGeofence) return;
     currentPosition = await _tryPosition();
   }
 
@@ -227,6 +317,16 @@ class QuickOrderController extends AppBaseController {
   }
 
   Future<void> _validateAndSetParty(PartyDropdownData party) async {
+    /// Geo-fence disabled — see [kEnforcePartyGeofence]. With no party
+    /// coordinates in the ERP the check rejected every customer, so selection
+    /// is immediate and needs no location permission.
+    if (!kEnforcePartyGeofence) {
+      selectedParty = party;
+      _persistSelectedParty();
+      update();
+      return;
+    }
+
     currentPosition ??= await _tryPosition();
     if (currentPosition == null) {
       ShowMessage.showSnackBar(
@@ -419,6 +519,8 @@ class QuickOrderController extends AppBaseController {
         item: item,
         brandName: selectedBrand?.brandname ?? '',
         qty: qty,
+        netRate: netRateOf(item),
+        discountPercent: discountOf(id),
       );
     }
 
@@ -449,6 +551,34 @@ class QuickOrderController extends AppBaseController {
     setQty(item, parsed ?? 0, syncField: false);
   }
 
+  void onNetRateTyped(ProductDataList item, String raw) {
+    final id = item.itemid;
+    if (id == null) return;
+
+    final text = raw.trim();
+    final parsed = double.tryParse(text);
+    if (text.isEmpty || parsed == null) {
+      /// Empty means "no override" — the line goes back to being priced at
+      /// the MRP rather than at zero.
+      _netRates.remove(id);
+    } else {
+      _netRates[id] = parsed;
+    }
+
+    /// Keep an already-staged line in step with the edit.
+    picked[id]?.netRate = netRateOf(item);
+    update([rowId(id), bottomBarId]);
+  }
+
+  void onDiscountTyped(ProductDataList item, String raw) {
+    final id = item.itemid;
+    if (id == null) return;
+    final value = (double.tryParse(raw.trim()) ?? 0).clamp(0, 100).toDouble();
+    _discounts[id] = value;
+    picked[id]?.discountPercent = value;
+    update([rowId(id), bottomBarId]);
+  }
+
   void removePicked(int itemId) {
     picked.remove(itemId);
     _writeField(itemId, 0);
@@ -456,12 +586,25 @@ class QuickOrderController extends AppBaseController {
   }
 
   void clearPicked() {
-    final ids = picked.keys.toList();
+    final entries = picked.values.toList();
     picked.clear();
-    for (final id in ids) {
-      _writeField(id, 0);
+    for (final e in entries) {
+      _writeField(e.item.itemid ?? -1, 0);
+      _resetPricing(e.item);
     }
     update();
+  }
+
+  /// Returns a line's Net Rate to the item-master rate and clears its
+  /// discount, so a line that has gone to the cart does not leave stale
+  /// pricing behind on the screen.
+  void _resetPricing(ProductDataList item) {
+    final id = item.itemid;
+    if (id == null) return;
+    _netRates.remove(id);
+    _discounts.remove(id);
+    _rateCtrls[id]?.text = '';
+    _discCtrls[id]?.text = '';
   }
 
   // Bulk add to cart
@@ -491,14 +634,35 @@ class QuickOrderController extends AppBaseController {
 
     try {
       for (final entry in entries) {
-        final res = await callAddToCart(
-          itemId: entry.item.itemid.toString(),
-          itemRate: (entry.item.rate ?? 0).toInt().toString(),
-          quantity: fmtQty(entry.qty),
-          unitId: (entry.item.unitid ?? 0).toString(),
+        /// Field roles on `addtocartwithnetrate`, established by probing the
+        /// live endpoint:
+        ///
+        ///   netrate         the rate charged, BEFORE the line discount
+        ///   discountpercent applied by the SERVER — do not pre-apply it
+        ///   itemrate        the list price / MRP, kept for the record; it
+        ///                   does not drive any total
+        ///
+        /// Proof: sending itemrate 999 with netrate 111 stored 111, and
+        /// sending netrate 1000 with discountpercent 10 stored 900.
+        ///
+        /// Rates carry paise; the original code truncated with `toInt()`,
+        /// which silently threw away most of a discount.
+        final res = await callAddToCartWithNetRate(
+          itemId: entry.item.itemid ?? 0,
+          itemRate: _round2(mrpOf(entry.item)),
+          netRate: _round2(entry.netRate),
+          discountPercent: entry.discountPercent,
+          quantity: entry.qty,
+          unitId: entry.item.unitid ?? 0,
         );
         if (res.status == 200) {
-          latestCartCount = res.data?.first.totalnumber ?? latestCartCount;
+          /// `data` may be an empty object on the newer endpoint, so never
+          /// assume a row is present. The count is refreshed from the server
+          /// afterwards regardless.
+          final rows = res.data;
+          if (rows != null && rows.isNotEmpty) {
+            latestCartCount = rows.first.totalnumber ?? latestCartCount;
+          }
         } else {
           failedIds.add(entry.item.itemid ?? -1);
         }
@@ -515,12 +679,26 @@ class QuickOrderController extends AppBaseController {
 
       /// Only clear what actually landed, so a partial failure leaves the
       /// failed rows staged to retry rather than silently dropping them.
+      /// Mirror how each line was priced so the Place Order screen can show
+      /// the MRP -> Net Rate -> discount calculation. The cart itself only
+      /// keeps the final rate.
+      final pricingToStore = <int, OrderLinePricing>{};
+
       final addedIds =
           picked.keys.where((id) => !failedIds.contains(id)).toList();
       for (final id in addedIds) {
-        picked.remove(id);
+        final entry = picked.remove(id);
         _writeField(id, 0);
+        if (entry != null) {
+          pricingToStore[id] = OrderLinePricing(
+            mrp: mrpOf(entry.item),
+            netRate: entry.netRate,
+            discountPercent: entry.discountPercent,
+          );
+          _resetPricing(entry.item);
+        }
       }
+      await OrderLinePricingStore.merge(pricingToStore);
 
       if (failedIds.isEmpty) {
         ShowMessage.showSnackBar('', '$successCount item(s) added to cart');

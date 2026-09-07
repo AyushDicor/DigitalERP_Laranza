@@ -2407,6 +2407,39 @@ class Api {
     }
   }
 
+  /// Adds a cart line carrying its own Net Rate and line discount.
+  ///
+  /// Unlike every other cart call this one takes a **JSON body with numeric
+  /// values**, not form fields — see the endpoint's Swagger contract. Hence the
+  /// `Map<String, dynamic>` and the explicit content type.
+  Future<AddToCartResponse> addToCartWithNetRate(
+      Map<String, dynamic> body) async {
+    List<ConnectivityResult> connectivityResults =
+        await connectivity.checkConnectivity();
+
+    if (connectivityResults.contains(ConnectivityResult.wifi) ||
+        connectivityResults.contains(ConnectivityResult.mobile)) {
+      String res = await _apiClient.postMethod(
+          method: _apiMethods.addToCartWithNetRate,
+          body: jsonEncode(body),
+          header: {'Content-Type': 'application/json'});
+      if (res.isNotEmpty) {
+        try {
+          return addToCartResponseFromJson(res);
+        } catch (e) {
+          if (kDebugMode) {
+            print(e);
+          }
+          return AddToCartResponse(status: 500, message: e.toString());
+        }
+      } else {
+        return AddToCartResponse(status: 500, message: 'Something went wrong');
+      }
+    } else {
+      return AddToCartResponse(status: 500, message: 'No internet');
+    }
+  }
+
   Future<AddToCartResponse> addToCart(Map<String, String> body) async {
     List<ConnectivityResult> connectivityResults =
         await connectivity.checkConnectivity();

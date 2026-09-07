@@ -112,7 +112,13 @@ class ProductDataList {
       this.rate,
       this.requiredpoint,
       this.quantity,
-      required unitid,
+
+      /// Was `required unitid` — a plain parameter, not `this.unitid`. The
+      /// value from the API was accepted and then discarded, so the field was
+      /// always null and every cart call sent `unitid: 0`. The old add-to-cart
+      /// tolerated that; `addtocartwithnetrate` rejects it with
+      /// "Data Not Added".
+      required this.unitid,
       this.isTextField});
 
   int? itemid;
