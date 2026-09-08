@@ -32,19 +32,15 @@ class EmpOption {
 }
 
 class EmployeeMasterPayload {
-  // Company scope
+
   final int compId;
   final int branchId;
   final int userId;
-
-  // Scope — chosen before anything else on the form
   final String vendorId;
   final String vendorName;
   final String siteId;
   final String siteName;
-
-  // General details
-  final String employeePhoto; // uploaded file name / url
+  final String employeePhoto;
   final String employeeName;
   final String genderId;
   final String genderName;
@@ -55,25 +51,19 @@ class EmployeeMasterPayload {
   final String designationId;
   final String designationName;
   final String personalPhoneNo;
-  final String dateOfJoining; // dd/MM/yyyy
-  final String dateOfBirth; // dd/MM/yyyy
-
-  // Salary + work terms
+  final String dateOfJoining;
+  final String dateOfBirth;
   final String salaryType;
   final String weekOff;
   final String otApplicable;
-  final String workHoursMode; // Default / Manual
+  final String workHoursMode;
   final String shiftId;
   final String shiftName;
   final String dailyWorkingHours;
-
-  // Document details
   final String aadharCardNo;
   final String aadharCardFile;
   final String panCardNo;
   final String panCardFile;
-
-  // Address details
   final String fullAddress;
   final String stateId;
   final String stateName;
@@ -121,27 +111,14 @@ class EmployeeMasterPayload {
     required this.pincode,
   });
 
-  /// Field names below are the ERP's own, confirmed 2026-08-26 by probing
-  /// api/employeeonboarding and reading back api/employeeonboarddetail. They
-  /// are NOT guesses any more, and several differ from the obvious spelling —
-  /// `name` (not employeename), `mobile`, `joiningdate`, `dob`, `aadharno`,
-  /// `panno`, `address`, `workinghours`. A wrong key here is silently dropped
-  /// by the server, so do not "tidy" these.
-  ///
-  /// The server requires `name`, `stateid`, and at least one of
-  /// `aadharno` / `panno`.
   Map<String, dynamic> toJson() => {
         'compid': compId,
         'branchid': branchId,
         'userid': userId,
-
-        // Scope
         'vendorid': vendorId,
         'vendorname': vendorName,
         'siteid': siteId,
         'sitename': siteName,
-
-        // General
         'name': employeeName,
         'genderid': genderId,
         'gender': genderName,
@@ -153,20 +130,13 @@ class EmployeeMasterPayload {
         'mobile': personalPhoneNo,
         'joiningdate': dateOfJoining,
         'dob': dateOfBirth,
-
-        // Salary + work terms
         'salarytype': salaryType,
         'weekoff': weekOff,
         'otapplicable': otApplicable,
         'shiftid': shiftId,
         'workinghours': dailyWorkingHours,
-
-        // Documents — the numbers. The scans themselves go up as multipart
-        // file parts named photo / aadharfile / panfile, not as text.
         'aadharno': aadharCardNo,
         'panno': panCardNo,
-
-        // Address
         'address': fullAddress,
         'stateid': stateId,
         'statename': stateName,

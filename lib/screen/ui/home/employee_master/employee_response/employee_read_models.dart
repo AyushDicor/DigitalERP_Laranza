@@ -1,4 +1,3 @@
-/// First non-empty value among [keys].
 String pick(Map<String, dynamic> j, List<String> keys) {
   for (final k in keys) {
     final v = j[k];
@@ -7,7 +6,7 @@ String pick(Map<String, dynamic> j, List<String> keys) {
   return '';
 }
 
-/// One row in the employee list.
+
 class EmployeeListItem {
   final String id;
   final String employeeCode;
@@ -49,7 +48,6 @@ class EmployeeListItem {
           'mobileno',
           'phone'
         ]),
-        // Only a full URL is renderable — a bare file name is not.
         photoUrl:
             pick(j, ['employeephoto', 'EmployeePhoto', 'photo', 'photourl']),
         dateOfJoining:
@@ -58,7 +56,7 @@ class EmployeeListItem {
 
   bool get hasPhoto => photoUrl.startsWith('http');
 
-  /// Initials for the avatar when there is no usable photo URL.
+
   String get initials {
     final parts =
         name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
@@ -68,23 +66,20 @@ class EmployeeListItem {
     return head(parts.first) + head(parts.last);
   }
 
-  /// Everything the list search box matches against.
+
   String get searchBlob =>
       '$name $employeeCode $designation $department $site $vendor $phone'
           .toLowerCase();
 }
 
-/// A titled block of label/value rows on the detail screen.
+
 class EmployeeDetailSection {
   final String title;
   final List<MapEntry<String, String>> rows;
   const EmployeeDetailSection(this.title, this.rows);
 }
 
-/// The full record behind the read-only detail screen.
-///
-/// Held as ordered label/value sections rather than a fixed field list, so a
-/// key the API does not send is simply left out instead of rendering blank.
+
 class EmployeeDetail {
   final String id;
   final String employeeCode;
@@ -92,8 +87,7 @@ class EmployeeDetail {
   final String designation;
   final String photoUrl;
 
-  /// Kept as plain fields as well as inside [sections], because the ID card
-  /// needs them individually rather than as display rows.
+
   final String department;
   final String vendor;
   final String site;
@@ -117,7 +111,6 @@ class EmployeeDetail {
   });
 
   factory EmployeeDetail.fromJson(Map<String, dynamic> j) {
-    /// Each spec row is [label, ...candidate keys].
     List<MapEntry<String, String>> rows(List<List<String>> spec) => [
           for (final row in spec)
             if (pick(j, row.sublist(1)).isNotEmpty)
@@ -127,7 +120,6 @@ class EmployeeDetail {
     final files = <MapEntry<String, String>>[];
     void addFile(String label, List<String> keys) {
       final v = pick(j, keys);
-      // Only full URLs are openable; a bare file name would 404.
       if (v.startsWith('http')) files.add(MapEntry(label, v));
     }
 
@@ -196,8 +188,6 @@ class EmployeeDetail {
   bool get hasPhoto => photoUrl.startsWith('http');
 }
 
-/// Pulls the row list out of whatever envelope the API uses — `data`, a nested
-/// `data.data`, `list`, or a bare top-level array.
 List<Map<String, dynamic>> extractRows(dynamic body) {
   dynamic node = body;
   if (node is Map) {
@@ -212,7 +202,6 @@ List<Map<String, dynamic>> extractRows(dynamic body) {
   return const [];
 }
 
-/// Pulls a single record out of the same range of envelopes.
 Map<String, dynamic>? extractRecord(dynamic body) {
   dynamic node = body;
   if (node is Map) {
@@ -233,11 +222,6 @@ Map<String, dynamic>? extractRecord(dynamic body) {
   return null;
 }
 
-/// Everything api/employeeidcard hands back for one employee's ID card.
-///
-/// This endpoint is the card's source of truth: it carries the company name
-/// and logo (which live nowhere else in the app's session) plus a server-built
-/// `qrdata` string, so the app never has to invent the QR payload itself.
 class EmployeeCardInfo {
   final String partyId;
   final String companyName;

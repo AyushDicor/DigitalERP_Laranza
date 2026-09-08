@@ -36,27 +36,68 @@ class ProfileView extends StatelessWidget {
                 expandedHeight: 260,
                 pinned: true,
                 elevation: 0,
+
+                /// A soft shadow once the content slides underneath, so the
+                /// white cards separate from the header instead of butting
+                /// straight against it.
+                scrolledUnderElevation: 3,
+                shadowColor: Colors.black26,
                 backgroundColor: purpleColor,
-                leading: GestureDetector(
-                  onTap: () => controller.backTap(),
-                  child: Container(
-                    margin: const EdgeInsets.all(10),
-                    child: const Icon(Icons.arrow_back_ios_new,
-                        color: Colors.white, size: 20),
-                  ),
+                surfaceTintColor: Colors.transparent,
+                shape: const RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.vertical(bottom: Radius.circular(24)),
                 ),
-                flexibleSpace: FlexibleSpaceBar(
-                  titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-                  title: const Text(
-                    'My Profile',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: 0.3,
+                leading: Padding(
+                  padding: const EdgeInsets.all(9),
+                  child: GestureDetector(
+                    onTap: () => controller.backTap(),
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new,
+                          color: Colors.white, size: 17),
                     ),
                   ),
-                  background: _HeroBanner(controller: controller),
+                ),
+                flexibleSpace: LayoutBuilder(
+                  builder: (context, constraints) {
+                    /// 1 while fully expanded, 0 once collapsed. Used to fade
+                    /// the avatar out on the way up — it used to shrink
+                    /// straight through the title, which is what made the
+                    /// scroll look chaotic.
+                    final minHeight = kToolbarHeight +
+                        MediaQuery.of(context).padding.top;
+                    final range = (260 - minHeight).clamp(1.0, 260.0);
+                    final expanded =
+                        ((constraints.maxHeight - minHeight) / range)
+                            .clamp(0.0, 1.0);
+
+                    return FlexibleSpaceBar(
+                      /// Starts clear of the back button. A hard `left: 20`
+                      /// put the title underneath it when collapsed.
+                      titlePadding: const EdgeInsetsDirectional.only(
+                          start: 58, bottom: 15, end: 16),
+                      title: const Text(
+                        'My Profile',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      background: Opacity(
+                        opacity: Curves.easeOut.transform(expanded),
+                        child: _HeroBanner(controller: controller),
+                      ),
+                    );
+                  },
                 ),
               ),
               SliverToBoxAdapter(
@@ -86,15 +127,40 @@ class ProfileView extends StatelessWidget {
                           ),
                         )
                       else
-                        for (final section
-                            in EmployeeProfileSpec.sections) ...[
-                          _SectionTile(
-                            section: section,
-                            status: controller.sectionStatus(section),
-                            onTap: () => controller.openSection(section),
+                        /// One card with hairline dividers rather than nine
+                        /// separate floating cards — the repeated rounded
+                        /// rectangles were the other thing making the scroll
+                        /// feel busy.
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          const SizedBox(height: 10),
-                        ],
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            children: [
+                              for (var i = 0;
+                                  i < EmployeeProfileSpec.sections.length;
+                                  i++) ...[
+                                if (i > 0)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 62),
+                                    child: Divider(
+                                        height: 1,
+                                        thickness: 1,
+                                        color: Color(0xFFEEF1F6)),
+                                  ),
+                                _SectionTile(
+                                  section: EmployeeProfileSpec.sections[i],
+                                  status: controller.sectionStatus(
+                                      EmployeeProfileSpec.sections[i]),
+                                  onTap: () => controller.openSection(
+                                      EmployeeProfileSpec.sections[i]),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       if (!controller.detailApiAvailable && !controller.isBusy)
                         const Padding(
                           padding: EdgeInsets.only(top: 12),
@@ -457,14 +523,14 @@ class _SectionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    /// Draws no card of its own — the surrounding group provides the single
+    /// white surface and the dividers between rows.
     return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+          padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
           child: Row(
             children: [
               Container(
