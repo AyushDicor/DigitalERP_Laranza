@@ -89,7 +89,10 @@ class DownloadDocumentController extends AppBaseController{
         // ShowMessage.showSnackBar('Download Document Name List Success ', res.message.toString());
       }
       else{
-        ShowMessage.showSnackBar('Download Document Name List res.status not 200 ', res.message.toString());
+        /// No snackbar here on purpose: for a company with no document types
+        /// this fires every time the screen opens. The screen shows an inline
+        /// notice explaining it instead.
+        downloadDocumentData = [];
       }
     }catch(e){
       ShowMessage.showSnackBar('Download Document Name List catch ', '$e');
@@ -101,6 +104,14 @@ class DownloadDocumentController extends AppBaseController{
   }
 
   Future<void> getDownloadDocumentListApi() async {
+    /// The endpoint throws an unhandled server error (a bare
+    /// {"Message":"An error has occurred."}) when `documentname` is blank, so
+    /// never let that request leave the app.
+    if ((selectDocument?.documentname ?? '').trim().isEmpty) {
+      ShowMessage.showSnackBar('', 'Please select a document type');
+      return;
+    }
+
     setBusy(true);
     try{
       Map<String , String> body= {};
@@ -117,7 +128,7 @@ class DownloadDocumentController extends AppBaseController{
         // ShowMessage.showSnackBar('Download Document Name List Success ', res.message.toString());
       }
       else{
-        ShowMessage.showSnackBar('Download Document List res.status not 200 ', res.message.toString());
+        ShowMessage.showSnackBar('', 'No documents found for the selected filters');
       }
     }catch(e){
       ShowMessage.showSnackBar('Download Document List catch ', '$e');
@@ -144,7 +155,7 @@ class DownloadDocumentController extends AppBaseController{
         downloadPrintData = res.data ?? [];
         return res.data?.first.url??'';
       }
-      return  ShowMessage.showSnackBar('Download Document Print res.status not 200 ', res.message.toString());;
+      return  ShowMessage.showSnackBar('', 'Could not open this document');;
     }catch(e){
 
       return  ShowMessage.showSnackBar('Download Document Print catch ', '$e');;

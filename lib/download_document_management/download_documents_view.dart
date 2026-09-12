@@ -653,6 +653,16 @@ class DownloadDocumentsView extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      /// Nothing on this screen works without document types,
+                      /// and they are configured per company in the ERP. When
+                      /// a company has none the dropdown is simply empty,
+                      /// which read as "the screen is broken".
+                      if (!controller.isBusy &&
+                          controller.downloadDocumentData.isEmpty) ...[
+                        _noDocumentTypesNotice(),
+                        const SizedBox(height: 14),
+                      ],
+
                       // Document Type
                       _sectionLabel('Document Type'),
                       const SizedBox(height: 8),
@@ -734,7 +744,38 @@ class DownloadDocumentsView extends StatelessWidget {
     );
   }
 
-  //  Document Type dropdown 
+  Widget _noDocumentTypesNotice() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 20, color: Color(0xFFB45309)),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'No document types are set up for your company yet, so there is '
+              'nothing to search. Ask your administrator to add them in the '
+              'ERP (Sales Order, Sales Invoice, and so on).',
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.45,
+                color: Color(0xFF92400E),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  //  Document Type dropdown
   Widget _documentTypeDropdown(DownloadDocumentController controller) {
     return DropdownButtonHideUnderline(
       child: DropdownButton2(

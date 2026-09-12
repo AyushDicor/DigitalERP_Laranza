@@ -1405,6 +1405,12 @@ String? _getDirectRoute(int? menuId) {
     2586: AppRoutes.paymentRequestListScreen,
     2812: AppRoutes.employeeMaster, // "Employee onboarding"
     2700: AppRoutes.ticketListScreen,
+
+    /// Document Management. The backend marks it child:1 but returns
+    /// "Menu Not Available" for its children on every company, so without
+    /// this it opened an empty sub-menu screen instead of the documents
+    /// screen the app already has.
+    2386: AppRoutes.documentDownload,
   };
   return menuId != null ? directRoutes[menuId] : null;
 }

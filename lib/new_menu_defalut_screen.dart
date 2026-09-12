@@ -1005,6 +1005,8 @@
 // The old grid of cards is completely removed.
 // 
 
+import 'package:digitalerp/app_routes/app_routes.dart';
+import 'package:digitalerp/homeview_new_controller.dart';
 import 'package:digitalerp/Menu_new_list_responce.dart';
 import 'package:digitalerp/menu_default_controller.dart';
 import 'package:digitalerp/screen/base/base_controller.dart';
@@ -1049,7 +1051,17 @@ class _MenuDefaultScreenState extends State<MenuDefaultScreen> {
       final children = ctrl.menuSubData;
 
       if (children.isEmpty) {
-        // Nothing to navigate to — stay on the fallback screen
+        /// The backend flags some menus as parents (child: 1) that have no
+        /// children granted at all — Document Management (2386) answers
+        /// "Menu Not Available" for every company, so this screen sat blank.
+        /// When the app already knows a screen for the parent itself, open
+        /// that instead of staying on an empty fallback.
+        final ownRoute =
+            HomeViewNewController.getRouteNameById(widget.menuID);
+        if (ownRoute != AppRoutes.homeNew) {
+          _navigated = true;
+          Get.offNamed(ownRoute);
+        }
         return;
       }
 
