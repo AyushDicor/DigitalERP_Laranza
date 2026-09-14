@@ -1,7 +1,7 @@
 class AppAssets {
   // static const String appLogo = 'assets/images/app_logo.png';
-  static const String globenexLogo          = 'assets/images/logo_new.png';
-  static const String appLogo               = 'assets/images/logo_new.png';
+  static const String globenexLogo          = 'assets/images/laranzalogo.png';
+  static const String appLogo               = 'assets/images/laranzalogo.png';
   static const String splashBg              = 'assets/images/splash_bg.png';
   static const String splashScreen          = 'assets/images/splash_screen.png';
   static const String setupBg               = 'assets/images/setup_bg.png';

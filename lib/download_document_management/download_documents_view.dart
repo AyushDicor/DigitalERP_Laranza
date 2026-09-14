@@ -625,7 +625,6 @@ final DateTime _kDocumentSearchFirstDate = DateTime(2020);
 
 class DownloadDocumentsView extends StatelessWidget {
   DownloadDocumentsView({Key? key}) : super(key: key);
-  final partyFocusNode = FocusNode();
 
   @override
   Widget build(BuildContext context) {
@@ -808,64 +807,8 @@ class DownloadDocumentsView extends StatelessWidget {
   }
 
   //  Party autocomplete 
-  Widget _partyField(DownloadDocumentController controller) {
-    final partyController = TextEditingController(
-        text: controller.selectPartyList?.partyname ?? '');
-    partyFocusNode.addListener(() {
-      if (partyFocusNode.hasFocus) {
-        partyController.selection = TextSelection(
-            baseOffset: 0, extentOffset: partyController.text.length);
-      }
-    });
-
-    return Container(
-      height: 50,
-      decoration: BoxDecoration(
-          color: _kWhite,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _kBorder)),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: AutoCompleteTextField<CustomerListData>(
-        key: GlobalKey<AutoCompleteTextFieldState<CustomerListData>>(),
-        controller: partyController,
-        focusNode: partyFocusNode,
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          hintText: 'Search Party',
-          hintStyle: TextStyle(color: _kTextHint, fontSize: 14),
-          suffixIcon: Icon(Icons.search, color: _kTextSub, size: 18),
-          contentPadding: EdgeInsets.only(top: 14),
-        ),
-        clearOnSubmit: false,
-        suggestions: controller.partyListData.toList(),
-        itemBuilder: (context, suggestion) => ListTile(
-          tileColor: _kWhite,
-          title: Text(suggestion.partyname.toString(),
-              style:
-              const TextStyle(fontSize: 14, color: _kTextPrimary)),
-          subtitle: Text(suggestion.mobileno.toString(),
-              style: const TextStyle(fontSize: 12, color: _kTextSub)),
-        ),
-        itemSorter: (a, b) => a.partyname!.compareTo(b.partyname!),
-        itemFilter: (suggestion, input) =>
-        suggestion.partyname!
-            .toLowerCase()
-            .contains(input.toLowerCase()) ||
-            suggestion.address!
-                .toLowerCase()
-                .contains(input.toLowerCase()) ||
-            suggestion.mobileno!
-                .toLowerCase()
-                .contains(input.toLowerCase()),
-        itemSubmitted: (suggestion) {
-          controller.setSelectedPartyDropDown(suggestion);
-          partyController.text = suggestion.partyname ?? '';
-          partyController.selection = TextSelection.fromPosition(
-              TextPosition(offset: partyController.text.length));
-        },
-      ),
-    );
-  }
+  Widget _partyField(DownloadDocumentController controller) =>
+      _PartyField(controller: controller);
 
   //  Date row 
   Widget _dateRow(
@@ -1048,4 +991,96 @@ class DownloadDocumentsView extends StatelessWidget {
       ]),
     ),
   );
+}
+/// Party autocomplete.
+///
+/// Stateful so its [TextEditingController], [FocusNode] and the
+/// [GlobalKey] the autocomplete package requires are created exactly once.
+/// They used to be built inside the parent's `build`, which meant every
+/// controller `update()` created a fresh key (destroying and recreating the
+/// field, dropping the suggestion overlay), a fresh text controller (never
+/// disposed), and stacked one more focus listener onto the same node.
+class _PartyField extends StatefulWidget {
+  const _PartyField({required this.controller});
+
+  final DownloadDocumentController controller;
+
+  @override
+  State<_PartyField> createState() => _PartyFieldState();
+}
+
+class _PartyFieldState extends State<_PartyField> {
+  final _key = GlobalKey<AutoCompleteTextFieldState<CustomerListData>>();
+  final _focus = FocusNode();
+  late final TextEditingController _text;
+
+  @override
+  void initState() {
+    super.initState();
+    _text = TextEditingController(
+        text: widget.controller.selectPartyList?.partyname ?? '');
+    _focus.addListener(_selectAllOnFocus);
+  }
+
+  void _selectAllOnFocus() {
+    if (_focus.hasFocus) {
+      _text.selection =
+          TextSelection(baseOffset: 0, extentOffset: _text.text.length);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_selectAllOnFocus);
+    _focus.dispose();
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+          color: _kWhite,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _kBorder)),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: AutoCompleteTextField<CustomerListData>(
+        key: _key,
+        controller: _text,
+        focusNode: _focus,
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          hintText: 'Search Party',
+          hintStyle: TextStyle(color: _kTextHint, fontSize: 14),
+          suffixIcon: Icon(Icons.search, color: _kTextSub, size: 18),
+          contentPadding: EdgeInsets.only(top: 14),
+        ),
+        clearOnSubmit: false,
+        suggestions: controller.partyListData.toList(),
+        itemBuilder: (context, suggestion) => ListTile(
+          tileColor: _kWhite,
+          title: Text(suggestion.partyname.toString(),
+              style: const TextStyle(fontSize: 14, color: _kTextPrimary)),
+          subtitle: Text(suggestion.mobileno.toString(),
+              style: const TextStyle(fontSize: 12, color: _kTextSub)),
+        ),
+        itemSorter: (a, b) => (a.partyname ?? '').compareTo(b.partyname ?? ''),
+        itemFilter: (suggestion, input) {
+          final q = input.toLowerCase();
+          return (suggestion.partyname ?? '').toLowerCase().contains(q) ||
+              (suggestion.address ?? '').toLowerCase().contains(q) ||
+              (suggestion.mobileno ?? '').toLowerCase().contains(q);
+        },
+        itemSubmitted: (suggestion) {
+          controller.setSelectedPartyDropDown(suggestion);
+          _text.text = suggestion.partyname ?? '';
+          _text.selection =
+              TextSelection.collapsed(offset: _text.text.length);
+        },
+      ),
+    );
+  }
 }

@@ -109,16 +109,29 @@ class AppNetworkImage extends StatelessWidget {
     return raw.trim();
   }
 
+  /// URLs that have already failed this session.
+  ///
+  /// Flutter's image cache deliberately does not cache failures, so every
+  /// rebuild of a widget showing a dead URL fired a fresh HTTP request, got
+  /// the same 404, and logged it again. The home header's avatar rebuilds on
+  /// every controller update, which flooded the console with one red line per
+  /// rebuild and made real logs impossible to read. Remembering the failure
+  /// stops both the repeat requests and the repeat logging.
+  static final Set<String> _failedUrls = <String>{};
+
   @override
   Widget build(BuildContext context) {
     final safeUrl = _sanitize(image);
 
-    if (safeUrl.isEmpty) {
+    if (safeUrl.isEmpty || _failedUrls.contains(safeUrl)) {
       return errorWidget ??
           SizedBox(
             height: height,
             width: width,
-            child: const Icon(Icons.image_not_supported, color: Colors.grey),
+            child: Icon(
+              safeUrl.isEmpty ? Icons.image_not_supported : Icons.broken_image,
+              color: Colors.grey,
+            ),
           );
     }
 
@@ -145,7 +158,10 @@ class AppNetworkImage extends StatelessWidget {
           );
         },
         errorBuilder: (context, error, stackTrace) {
-          debugPrint('❌ Image.network error: $error');
+          /// Log a dead URL once, then never request it again this session.
+          if (_failedUrls.add(safeUrl)) {
+            debugPrint('❌ Image.network error: $error');
+          }
           return errorWidget ??
               SizedBox(
                 height: height,
