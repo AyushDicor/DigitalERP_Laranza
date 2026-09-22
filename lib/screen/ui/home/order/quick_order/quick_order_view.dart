@@ -1,5 +1,6 @@
 import 'package:digitalerp/response/subcategory_brand_response.dart';
 import 'package:digitalerp/screen/ui/home/order/quick_order/quick_order_controller.dart';
+import 'package:digitalerp/utils/order_line_pricing.dart';
 import 'package:digitalerp/utils/picker_sheet.dart';
 import 'package:digitalerp/utils/app_constant_new.dart';
 import 'package:digitalerp/utils/app_network_image.dart';
@@ -41,6 +42,7 @@ class QuickOrderView extends StatelessWidget {
                 showCartIcon: true,
                 onCartTap: () => ctrl.tapOnCart(),
               ),
+              _orderTypeSelector(ctrl),
               _selectors(ctrl),
               if (ctrl.categoryList.isNotEmpty) _categoryChips(ctrl),
               _searchBar(ctrl),
@@ -50,6 +52,78 @@ class QuickOrderView extends StatelessWidget {
           ),
         ),
         bottomNavigationBar: _bottomBar(context, ctrl),
+      ),
+    );
+  }
+
+  // Order Type
+
+  /// Sits above the Company/Brand card because it decides what the rest of the
+  /// screen lets the user edit: an Estimate opens the MRP box on every line, a
+  /// PI keeps the master rate and adds tax at checkout.
+  ///
+  /// A two-option segmented control rather than a dropdown sheet — with only
+  /// Estimate and PI to choose from, both are visible without a tap and the
+  /// current one reads at a glance.
+  Widget _orderTypeSelector(QuickOrderController ctrl) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: newSurfaceColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: newBorderColor),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.description_outlined,
+              size: 14, color: newTextSecondary),
+          const SizedBox(width: 5),
+          const Text(
+            'Order Type',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: newTextSecondary,
+            ),
+          ),
+          const Spacer(),
+          for (final type in OrderType.values) ...[
+            if (type != OrderType.values.first) const SizedBox(width: 8),
+            _orderTypeChip(
+              label: type.label,
+              selected: ctrl.orderType == type,
+              onTap: () => ctrl.onPickOrderType(type),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _orderTypeChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? newBlueColor : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? newBlueColor : newBorderColor),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : newTextSecondary,
+          ),
+        ),
       ),
     );
   }
@@ -438,35 +512,147 @@ class QuickOrderView extends StatelessWidget {
     );
   }
 
-  /// Net Rate and Discount % for this line.
+  /// The per-line pricing controls: MRP (Estimate only), Net Rate, and one
+  /// discount expressed either way.
   ///
-  /// Net Rate replaces the item-master rate, then Discount % comes off the Net
-  /// Rate — the two are independent, so a line can be repriced, discounted, or
-  /// both.
+  /// Net Rate replaces the MRP, then the discount comes off the Net Rate — the
+  /// two are independent, so a line can be repriced, discounted, or both. The
+  /// MRP box appears only on an Estimate; a PI prices off the item master and
+  /// the field is hidden rather than disabled, so there is nothing to tap.
   Widget _pricingRow(QuickOrderController ctrl, ProductDataList item) {
-    return Row(
-      children: [
-        Expanded(
-          child: _pricingField(
-            label: 'Net Rate',
+    final editableMrp = ctrl.orderType.allowsMrpEdit;
+    final discountType = ctrl.discountTypeOf(item.itemid);
+    final byAmount = discountType == OrderDiscountType.amount;
 
-            /// Always hints '0', never the MRP — the box is for a rate the
-            /// user chooses to override with, and echoing the MRP made an
-            /// untouched line look as though it had been priced.
-            /// Left empty, the line still prices at MRP.
-            hint: '0',
-            controller: ctrl.rateCtrl(item),
-            onChanged: (v) => ctrl.onNetRateTyped(item, v),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            if (editableMrp) ...[
+              Expanded(
+                child: _pricingField(
+                  label: 'MRP',
+
+                  /// Hints the item-master rate, which is what an empty box
+                  /// prices at.
+                  hint: _money(ctrl.masterRateOf(item)),
+                  controller: ctrl.mrpCtrl(item),
+                  onChanged: (v) => ctrl.onMrpTyped(item, v),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: _pricingField(
+                label: 'Net Rate',
+
+                /// Always hints '0', never the MRP — the box is for a rate the
+                /// user chooses to override with, and echoing the MRP made an
+                /// untouched line look as though it had been priced.
+                /// Left empty, the line still prices at MRP.
+                hint: '0',
+                controller: ctrl.rateCtrl(item),
+                onChanged: (v) => ctrl.onNetRateTyped(item, v),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: _discountTypePicker(ctrl, item, discountType),
+            ),
+            const SizedBox(width: 10),
+
+            /// One field, swapped by type — the other value is cleared by the
+            /// controller, so the two discounts can never both be live.
+            Expanded(
+              child: byAmount
+                  ? _pricingField(
+                      key: ValueKey('disc_amt_${item.itemid}'),
+                      label: 'Discount Amount',
+                      prefix: '₹ ',
+                      hint: '0',
+                      controller: ctrl.discAmtCtrl(item),
+                      onChanged: (v) => ctrl.onDiscountAmountTyped(item, v),
+                    )
+                  : _pricingField(
+                      key: ValueKey('disc_pct_${item.itemid}'),
+                      label: 'Discount %',
+                      suffix: '%',
+                      hint: '0',
+                      controller: ctrl.discCtrl(item),
+                      onChanged: (v) => ctrl.onDiscountTyped(item, v),
+                    ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Sits immediately left of the discount box so the two read as one control.
+  Widget _discountTypePicker(QuickOrderController ctrl, ProductDataList item,
+      OrderDiscountType selected) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Discount Type',
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: newTextSecondary,
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _pricingField(
-            label: 'Discount %',
-            suffix: '%',
-            hint: '0',
-            controller: ctrl.discCtrl(item),
-            onChanged: (v) => ctrl.onDiscountTyped(item, v),
+        const SizedBox(height: 4),
+        PopupMenuButton<OrderDiscountType>(
+          initialValue: selected,
+          tooltip: 'Discount type',
+          position: PopupMenuPosition.under,
+          onSelected: (type) => ctrl.onPickDiscountType(item, type),
+          itemBuilder: (_) => [
+            for (final type in OrderDiscountType.values)
+              PopupMenuItem(
+                value: type,
+                height: 40,
+                child: Text(
+                  type.label,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+          ],
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: newBorderColor),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    selected.shortLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: newTextPrimary,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.keyboard_arrow_down_rounded,
+                    size: 18, color: newTextSecondary),
+              ],
+            ),
           ),
         ),
       ],
@@ -478,9 +664,12 @@ class QuickOrderView extends StatelessWidget {
     required TextEditingController controller,
     required ValueChanged<String> onChanged,
     String? suffix,
+    String? prefix,
     String? hint,
+    Key? key,
   }) {
     return Column(
+      key: key,
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -511,6 +700,9 @@ class QuickOrderView extends StatelessWidget {
               isDense: true,
               hintText: hint,
               hintStyle: const TextStyle(color: newTextHint, fontSize: 13),
+              prefixText: prefix,
+              prefixStyle:
+                  const TextStyle(color: newTextSecondary, fontSize: 12),
               suffixText: suffix,
               suffixStyle:
                   const TextStyle(color: newTextSecondary, fontSize: 12),

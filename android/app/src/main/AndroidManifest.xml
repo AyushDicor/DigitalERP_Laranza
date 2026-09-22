@@ -176,7 +176,7 @@
         REPLACEMENT STRATEGY:
         - File picking  → use file_picker package (uses system picker, no permission needed)
         - File saving   → use getApplicationDocumentsDirectory() (no permission needed)
-        - Media access  → READ_MEDIA_IMAGES / READ_MEDIA_VIDEO (Android 13+ scoped)
+        - Media access  → image_picker system Photo Picker (no READ_MEDIA_* permission)
     -->
 
     <!-- Core permissions for GLOBENEX ERP -->
@@ -186,10 +186,19 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
-    <!-- Scoped media permissions for Android 13+ (API 33+) -->
-    <!-- Only include these if your app lets users pick images/videos as attachments -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!--
+        Media-library permissions are NOT needed and are policy-restricted on Play
+        ("Photo and Video Permissions" — flagged on the Laranza listing). Every
+        gallery pick in the app goes through image_picker, which uses the system
+        Photo Picker (API 33+) / ACTION_GET_CONTENT (older), neither of which needs
+        a permission. open_filex merges all three in, so remove them explicitly.
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"
+        tools:node="remove" />
 
     <queries>
         <!-- Required to open HTTPS links (e.g. attachment previews) -->
@@ -210,7 +219,7 @@
     </queries>
 
     <application
-        android:label="Digital ERP"
+        android:label="Laranza"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"

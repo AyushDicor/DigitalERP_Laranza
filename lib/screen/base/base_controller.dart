@@ -214,10 +214,21 @@ class AppBaseController extends GetxController {
 
   /// Adds a cart line together with the pricing behind its rate.
   ///
-  /// [itemRate] is the product's MRP — a record of the list price, it does not
-  /// drive any total. [netRate] is the rate actually charged, BEFORE the line
-  /// discount, and is what the cart totals on. [discountPercent] is applied by
-  /// the server, so it must never be pre-applied to [netRate].
+  /// Contract of `addtocartwithnetrate` as probed against the live Laranza
+  /// backend on 2026-09-21 (it changed when the Laranza columns were added):
+  ///
+  ///   itemrate         the MRP, recorded and printed, drives no total
+  ///   netrate          the rate the line is stored at; `0` means "use itemrate"
+  ///   discountpercent  RECORDED ONLY — the server no longer applies it, so the
+  ///                    caller must fold a % discount into [netRate] itself
+  ///   discountamount   APPLIED by the server, as a WHOLE-LINE figure:
+  ///                    stored rate = netrate − amount / quantity
+  ///   ordertype        "Estimate" / "PI"; on Estimate the server zeroes GST
+  ///
+  /// So a %-discounted line sends the already-reduced rate plus the %, and an
+  /// amount-discounted line sends the pre-discount rate plus the amount.
+  /// (Verified: 625 @25% sent as netrate 468.75 → stored 468.75, GST on that;
+  /// 675 net 600 with amount 50 → stored 550, GST 99.)
   Future<AddToCartResponse> callAddToCartWithNetRate({
     required int itemId,
     required double itemRate,
@@ -225,6 +236,8 @@ class AppBaseController extends GetxController {
     required double discountPercent,
     required double quantity,
     required int unitId,
+    double discountAmount = 0,
+    String orderType = 'Estimate',
   }) async {
     try {
       UserData? currentUserData = await userDataController.getUserData;
@@ -245,6 +258,8 @@ class AppBaseController extends GetxController {
         RequestKeys.unitId: unitId,
         RequestKeys.netRate: netRate,
         RequestKeys.itemDiscountPercent: discountPercent,
+        RequestKeys.discountAmount: discountAmount,
+        RequestKeys.orderType: orderType,
       };
       return await api.addToCartWithNetRate(body);
     } catch (e) {
@@ -425,21 +440,11 @@ void openPdfPreview({
 
 Future<void> downloadAndSharePdfFile(
     {required String downloadUrl, required String pdfFileName}) async {
-  bool isAboveAndroid32 = await checkIsAboveAndroid32();
-  if (isAboveAndroid32) {
-    await pdfSaveAndShare(fileUrl: downloadUrl, pdfFileName: pdfFileName);
-  } else {
-    PermissionStatus storagePermission = await Permission.storage.request();
-
-    if (storagePermission == PermissionStatus.granted) {
-      await pdfSaveAndShare(fileUrl: downloadUrl, pdfFileName: pdfFileName);
-    } else if (storagePermission == PermissionStatus.denied) {
-      ShowMessage.showSnackBar('Recommended', 'This Permission is recommended');
-    } else if (storagePermission == PermissionStatus.permanentlyDenied) {
-      openAppSettings();
-    }
-  }
-  return;
+  // The file is written to the app-private external dir, which needs no
+  // storage permission on any Android version. The old Android <= 12 branch
+  // asked for Permission.storage, which is no longer in the manifest, so
+  // permission_handler always answered "denied" and the share never happened.
+  await pdfSaveAndShare(fileUrl: downloadUrl, pdfFileName: pdfFileName);
 }
 
 Future<void> pdfSaveAndShare({

@@ -23,9 +23,15 @@ class GetCartListResponse {
 
   factory GetCartListResponse.fromJson(Map<String, dynamic> json) => GetCartListResponse(
         success: json["success"],
+        /// `cartdetailnew` answers an empty cart with ONE all-zero row (id 0,
+        /// productid 0) instead of an empty list — drop it so the cart really
+        /// reads as empty.
         data: json["data"] == null
             ? null
-            : List<GetCartListData>.from(json["data"].map((x) => GetCartListData.fromJson(x))),
+            : (json["data"] as List)
+                .map((x) => GetCartListData.fromJson(x))
+                .where((x) => (x.id ?? 0) > 0)
+                .toList(),
         message: json["message"],
         status: json["status"],
       );
@@ -51,6 +57,11 @@ class GetCartListData {
       this.subtotal,
       this.shippingamount,
       this.grandtotal,
+      this.ordertype,
+      this.gstpercent,
+      this.gstamount,
+      this.discountpercent,
+      this.discountamount,
       this.isTextField});
 
   int? id;
@@ -64,6 +75,16 @@ class GetCartListData {
   double? subtotal;
   double? shippingamount;
   double? grandtotal;
+
+  /// Laranza-only columns from `cartdetailnew`. [ordertype] is what the line
+  /// was added as ("Estimate" / "PI" / "" for legacy rows). [gstpercent] is
+  /// zeroed by the server on an Estimate; [gstamount] is for the WHOLE line
+  /// (rate x qty x %), already worked out on the discounted rate.
+  String? ordertype;
+  double? gstpercent;
+  double? gstamount;
+  double? discountpercent;
+  double? discountamount;
   bool? isTextField;
   factory GetCartListData.fromJson(Map<String, dynamic> json) => GetCartListData(
       id: json["id"],
@@ -77,6 +98,11 @@ class GetCartListData {
       subtotal: json["subtotal"],
       shippingamount: json["shippingamount"],
       grandtotal: json["grandtotal"],
+      ordertype: json["ordertype"],
+      gstpercent: (json["gstpercent"] as num?)?.toDouble(),
+      gstamount: (json["gstamount"] as num?)?.toDouble(),
+      discountpercent: (json["discountpercent"] as num?)?.toDouble(),
+      discountamount: (json["discountamount"] as num?)?.toDouble(),
       isTextField: json["isTextField"] ?? false);
 
   Map<String, dynamic> toJson() => {
@@ -91,5 +117,10 @@ class GetCartListData {
         "subtotal": subtotal,
         "shippingamount": shippingamount,
         "grandtotal": grandtotal,
+        "ordertype": ordertype,
+        "gstpercent": gstpercent,
+        "gstamount": gstamount,
+        "discountpercent": discountpercent,
+        "discountamount": discountamount,
       };
 }

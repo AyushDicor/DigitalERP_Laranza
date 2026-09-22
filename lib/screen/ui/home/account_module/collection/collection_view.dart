@@ -88,7 +88,7 @@ class CollectionView extends StatelessWidget {
                             const SizedBox(height: 8),
                             _ledgerDropdown(controller),
                             const SizedBox(height: 16),
-                            _sectionLabel(AppString.remark),
+                            _sectionLabel(AppString.remark, required: true),
                             const SizedBox(height: 8),
                             _boxField(
                               controller: controller.remarkController,
@@ -147,10 +147,20 @@ class CollectionView extends StatelessWidget {
     );
   }
 
-  Widget _sectionLabel(String label) {
-    return Text(
-      label,
-      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: newTextSecondary),
+  /// [required] adds the red asterisk the rest of the app uses for mandatory
+  /// fields, so the user sees it before Submit tells them.
+  Widget _sectionLabel(String label, {bool required = false}) {
+    final style = TextStyle(
+        fontSize: 13, fontWeight: FontWeight.w600, color: newTextSecondary);
+    if (!required) return Text(label, style: style);
+    return Text.rich(
+      TextSpan(
+        text: label,
+        style: style,
+        children: const [
+          TextSpan(text: ' *', style: TextStyle(color: Colors.red)),
+        ],
+      ),
     );
   }
 

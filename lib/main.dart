@@ -75,7 +75,7 @@ class _MyAppState extends State<MyApp> {
         navigatorKey: AliceInterceptor.getAlice.getNavigatorKey(),
         smartManagement: SmartManagement.keepFactory,
         debugShowCheckedModeBanner: false,
-        title: 'Digital ERP',
+        title: 'Laranza',
         getPages: AppPages.routes,
         initialRoute: AppPages.initial,
         builder: (context, child) {
@@ -106,7 +106,7 @@ class _MyAppState extends State<MyApp> {
 //         navigatorKey: AliceInterceptor.getAlice.getNavigatorKey(),
 //         smartManagement: SmartManagement.keepFactory,
 //         debugShowCheckedModeBanner: false,
-//         title: 'Digital ERP',
+//         title: 'Laranza',
 //
 //         // DevicePreview integration
 //         useInheritedMediaQuery: true,

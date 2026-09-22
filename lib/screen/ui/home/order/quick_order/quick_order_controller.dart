@@ -26,29 +26,47 @@ class PickedItem {
   final String brandName;
   double qty;
 
-  /// Rate actually charged before the line discount. Defaults to the item
-  /// master rate but is editable per line, because a salesperson may need to
-  /// quote a different price than the master carries.
+  /// List price for the line. The item-master rate on a PI, where it is fixed;
+  /// on an Estimate the user may retype it, so it is held per line rather than
+  /// read back off [item].
+  double mrp;
+
+  /// Rate actually charged before the line discount. Defaults to [mrp] but is
+  /// editable per line, because a salesperson may need to quote a different
+  /// price than the master carries.
   double netRate;
 
-  /// Line discount, applied on top of [netRate].
+  /// Line discount, applied on top of [netRate] — as a percentage or as flat
+  /// rupees per unit, never both. [discountType] says which one counts.
   double discountPercent;
+  double discountAmount;
+  OrderDiscountType discountType;
 
   PickedItem({
     required this.item,
     required this.brandName,
     required this.qty,
+    required this.mrp,
     required this.netRate,
     required this.discountPercent,
+    required this.discountAmount,
+    required this.discountType,
   });
+
+  /// Rupees off one unit, whichever way the discount was entered. Capped at
+  /// the Net Rate so a line can never go negative.
+  double get discountPerUnit {
+    if (netRate <= 0) return 0;
+    final off = discountType == OrderDiscountType.amount
+        ? discountAmount
+        : netRate * discountPercent / 100;
+    return off.clamp(0, netRate).toDouble();
+  }
 
   /// What the customer pays per unit, and what is sent to the cart as
   /// `itemrate` — the cart stores no discount column, so the discount has to
   /// be folded into the rate.
-  double get finalRate {
-    final pct = discountPercent.clamp(0, 100).toDouble();
-    return netRate - (netRate * pct / 100);
-  }
+  double get finalRate => netRate - discountPerUnit;
 
   double get lineTotal => finalRate * qty;
 }
@@ -95,18 +113,66 @@ class QuickOrderController extends AppBaseController {
   /// rebuilds — recreating a controller inside `build` resets the cursor on
   /// every keystroke, which makes multi-digit entry impossible.
   final Map<int, TextEditingController> _qtyCtrls = {};
+  final Map<int, TextEditingController> _mrpCtrls = {};
   final Map<int, TextEditingController> _rateCtrls = {};
   final Map<int, TextEditingController> _discCtrls = {};
+  final Map<int, TextEditingController> _discAmtCtrls = {};
 
   /// Per-line pricing overrides, keyed by item id. Held separately from
   /// [picked] so a rate typed before any quantity is not lost, and so both
   /// survive switching category chips or brands.
+  final Map<int, double> _mrps = {};
   final Map<int, double> _netRates = {};
   final Map<int, double> _discounts = {};
+  final Map<int, double> _discountAmounts = {};
+  final Map<int, OrderDiscountType> _discountTypes = {};
+
+  // Order Type
+
+  /// Estimate or PI. Drives whether the MRP may be retyped and whether tax is
+  /// added at checkout; see [OrderType]. Defaults to Estimate, which is the
+  /// behaviour the screen had before the type existed.
+  OrderType orderType = OrderType.estimate;
+
+  static const String orderTypeId = 'quick_order_order_type';
+
+  /// Switching the document type re-prices nothing that was typed — a Net
+  /// Rate or discount entered for a line stays. Only a retyped MRP is dropped
+  /// on the way to PI, where the master rate is authoritative.
+  void onPickOrderType(OrderType type) {
+    if (type == orderType) return;
+    orderType = type;
+
+    if (!type.allowsMrpEdit && _mrps.isNotEmpty) {
+      final ids = _mrps.keys.toList();
+      _mrps.clear();
+      for (final id in ids) {
+        _mrpCtrls[id]?.text = '';
+        final entry = picked[id];
+        if (entry != null) {
+          entry.mrp = masterRateOf(entry.item);
+
+          /// A line with no typed Net Rate is priced at its MRP, so it has to
+          /// follow the MRP back to the master rate too.
+          entry.netRate = netRateOf(entry.item);
+        }
+      }
+    }
+
+    SharedPre.setValue(SharedPre.orderType, type.name);
+    update();
+  }
+
+  /// The line's list price: the item-master rate, or the one typed over it on
+  /// an Estimate. An empty MRP box means "use the master rate".
+  double mrpOf(ProductDataList item) =>
+      _mrps[item.itemid] ?? masterRateOf(item);
 
   /// The item-master price, exactly as the server sent it. Never altered by
   /// anything typed on this screen.
-  double mrpOf(ProductDataList item) => (item.rate ?? 0).toDouble();
+  double masterRateOf(ProductDataList item) => (item.rate ?? 0).toDouble();
+
+  bool hasMrpOverride(int? itemId) => _mrps.containsKey(itemId);
 
   /// The rate the line is priced at: the typed Net Rate when one has been
   /// entered, otherwise the MRP. Leaving the field empty means "use the MRP",
@@ -118,11 +184,36 @@ class QuickOrderController extends AppBaseController {
 
   double discountOf(int? itemId) => _discounts[itemId] ?? 0;
 
-  /// Net rate less the line discount — the figure that reaches the cart.
-  double finalRateOf(ProductDataList item) {
+  double discountAmountOf(int? itemId) => _discountAmounts[itemId] ?? 0;
+
+  OrderDiscountType discountTypeOf(int? itemId) =>
+      _discountTypes[itemId] ?? OrderDiscountType.percent;
+
+  /// Rupees off one unit, whichever way the line's discount was entered.
+  double discountPerUnitOf(ProductDataList item) {
     final net = netRateOf(item);
-    final pct = discountOf(item.itemid).clamp(0, 100).toDouble();
-    return net - (net * pct / 100);
+    if (net <= 0) return 0;
+    final id = item.itemid;
+    final off = discountTypeOf(id) == OrderDiscountType.amount
+        ? discountAmountOf(id)
+        : net * discountOf(id) / 100;
+    return off.clamp(0, net).toDouble();
+  }
+
+  /// Net rate less the line discount — the figure that reaches the cart.
+  double finalRateOf(ProductDataList item) =>
+      netRateOf(item) - discountPerUnitOf(item);
+
+  /// Starts empty, with the master rate as the hint — an MRP box left alone
+  /// means "use the item-master rate", the same convention the Net Rate box
+  /// follows. Estimate only; on a PI the field is not shown.
+  TextEditingController mrpCtrl(ProductDataList item) {
+    final id = item.itemid ?? -1;
+    return _mrpCtrls.putIfAbsent(id, () {
+      final override = _mrps[id];
+      return TextEditingController(
+          text: override == null ? '' : fmtMoney(override));
+    });
   }
 
   /// Starts empty, with the MRP shown as the hint. Pre-filling it with the MRP
@@ -142,6 +233,14 @@ class QuickOrderController extends AppBaseController {
     return _discCtrls.putIfAbsent(id, () {
       final d = discountOf(id);
       return TextEditingController(text: d == 0 ? '' : fmtQty(d));
+    });
+  }
+
+  TextEditingController discAmtCtrl(ProductDataList item) {
+    final id = item.itemid ?? -1;
+    return _discAmtCtrls.putIfAbsent(id, () {
+      final d = discountAmountOf(id);
+      return TextEditingController(text: d == 0 ? '' : fmtMoney(d));
     });
   }
 
@@ -189,6 +288,7 @@ class QuickOrderController extends AppBaseController {
 
   @override
   void onInit() {
+    _restoreOrderType();
     getPartyList();
     getBrandList();
     getCartCount();
@@ -196,19 +296,33 @@ class QuickOrderController extends AppBaseController {
     super.onInit();
   }
 
+  /// The document type survives leaving the screen, so a user who goes to the
+  /// cart and comes back to add more lines does not silently drop from PI to
+  /// Estimate mid-basket.
+  Future<void> _restoreOrderType() async {
+    final stored = await SharedPre.getStringValue(SharedPre.orderType);
+    if (stored.isEmpty) return;
+    orderType = OrderType.fromName(stored);
+    update();
+  }
+
   @override
   void onClose() {
     searchController.dispose();
     for (final c in [
       ..._qtyCtrls.values,
+      ..._mrpCtrls.values,
       ..._rateCtrls.values,
       ..._discCtrls.values,
+      ..._discAmtCtrls.values,
     ]) {
       c.dispose();
     }
     _qtyCtrls.clear();
+    _mrpCtrls.clear();
     _rateCtrls.clear();
     _discCtrls.clear();
+    _discAmtCtrls.clear();
     super.onClose();
   }
 
@@ -519,8 +633,11 @@ class QuickOrderController extends AppBaseController {
         item: item,
         brandName: selectedBrand?.brandname ?? '',
         qty: qty,
+        mrp: mrpOf(item),
         netRate: netRateOf(item),
         discountPercent: discountOf(id),
+        discountAmount: discountAmountOf(id),
+        discountType: discountTypeOf(id),
       );
     }
 
@@ -551,6 +668,47 @@ class QuickOrderController extends AppBaseController {
     setQty(item, parsed ?? 0, syncField: false);
   }
 
+  /// Estimate only. An MRP of 0 is rejected at save time by [mrpError] rather
+  /// than here, so the user can clear the box and retype without the value
+  /// being snapped back under the caret.
+  void onMrpTyped(ProductDataList item, String raw) {
+    final id = item.itemid;
+    if (id == null) return;
+
+    final text = raw.trim();
+    final parsed = double.tryParse(text);
+    if (text.isEmpty || parsed == null) {
+      /// Empty means "no override" — the line goes back to the master rate.
+      _mrps.remove(id);
+    } else {
+      _mrps[id] = parsed;
+    }
+
+    final entry = picked[id];
+    if (entry != null) {
+      entry.mrp = mrpOf(item);
+
+      /// The Net Rate follows the MRP only while it has not been typed over.
+      entry.netRate = netRateOf(item);
+    }
+    update([rowId(id), bottomBarId]);
+  }
+
+  /// The first staged line whose MRP is not a usable price, or null when every
+  /// line is fine. An MRP must be a number greater than zero.
+  ///
+  /// Only meaningful on an Estimate; a PI always prices off the master rate.
+  String? get mrpError {
+    if (!orderType.allowsMrpEdit) return null;
+    for (final entry in picked.values) {
+      if (entry.mrp <= 0) {
+        return 'Enter an MRP greater than 0 for '
+            '"${entry.item.itemname ?? 'this item'}"';
+      }
+    }
+    return null;
+  }
+
   void onNetRateTyped(ProductDataList item, String raw) {
     final id = item.itemid;
     if (id == null) return;
@@ -570,12 +728,48 @@ class QuickOrderController extends AppBaseController {
     update([rowId(id), bottomBarId]);
   }
 
+  /// Switches a line between a percentage and a flat amount, clearing whatever
+  /// was typed under the old type. Only one discount can ever be live, so the
+  /// two can never be applied together or sent together.
+  void onPickDiscountType(ProductDataList item, OrderDiscountType type) {
+    final id = item.itemid;
+    if (id == null || discountTypeOf(id) == type) return;
+
+    _discountTypes[id] = type;
+    _discounts.remove(id);
+    _discountAmounts.remove(id);
+    _discCtrls[id]?.text = '';
+    _discAmtCtrls[id]?.text = '';
+
+    final entry = picked[id];
+    if (entry != null) {
+      entry.discountType = type;
+      entry.discountPercent = 0;
+      entry.discountAmount = 0;
+    }
+    update([rowId(id), bottomBarId]);
+  }
+
+  /// A percentage is clamped to 0-100; anything unparseable reads as no
+  /// discount rather than throwing out of `onChanged`.
   void onDiscountTyped(ProductDataList item, String raw) {
     final id = item.itemid;
     if (id == null) return;
     final value = (double.tryParse(raw.trim()) ?? 0).clamp(0, 100).toDouble();
     _discounts[id] = value;
     picked[id]?.discountPercent = value;
+    update([rowId(id), bottomBarId]);
+  }
+
+  /// Flat rupees off one unit. Negatives are rejected, and anything above the
+  /// Net Rate is capped by [discountPerUnitOf] so the line cannot go negative.
+  void onDiscountAmountTyped(ProductDataList item, String raw) {
+    final id = item.itemid;
+    if (id == null) return;
+    final parsed = double.tryParse(raw.trim()) ?? 0;
+    final value = parsed < 0 ? 0.0 : parsed;
+    _discountAmounts[id] = value;
+    picked[id]?.discountAmount = value;
     update([rowId(id), bottomBarId]);
   }
 
@@ -595,16 +789,21 @@ class QuickOrderController extends AppBaseController {
     update();
   }
 
-  /// Returns a line's Net Rate to the item-master rate and clears its
+  /// Returns a line's MRP and Net Rate to the item-master rate and clears its
   /// discount, so a line that has gone to the cart does not leave stale
   /// pricing behind on the screen.
   void _resetPricing(ProductDataList item) {
     final id = item.itemid;
     if (id == null) return;
+    _mrps.remove(id);
     _netRates.remove(id);
     _discounts.remove(id);
+    _discountAmounts.remove(id);
+    _discountTypes.remove(id);
+    _mrpCtrls[id]?.text = '';
     _rateCtrls[id]?.text = '';
     _discCtrls[id]?.text = '';
+    _discAmtCtrls[id]?.text = '';
   }
 
   // Bulk add to cart
@@ -624,6 +823,15 @@ class QuickOrderController extends AppBaseController {
       return;
     }
 
+    /// An Estimate may be priced off a retyped MRP, and a zero one would post
+    /// a free line. Blocked here rather than in the field so the box can be
+    /// cleared and retyped without the value snapping back.
+    final invalidMrp = mrpError;
+    if (invalidMrp != null) {
+      ShowMessage.showSnackBar('Check MRP', invalidMrp);
+      return;
+    }
+
     isAddingToCart = true;
     addedSoFar = 0;
     update([bottomBarId]);
@@ -634,24 +842,42 @@ class QuickOrderController extends AppBaseController {
 
     try {
       for (final entry in entries) {
-        /// Field roles on `addtocartwithnetrate`, established by probing the
-        /// live endpoint:
+        /// How each line goes to `addtocartwithnetrate` (contract in
+        /// [callAddToCartWithNetRate], probed 2026-09-21/22):
         ///
-        ///   netrate         the rate charged, BEFORE the line discount
-        ///   discountpercent applied by the SERVER — do not pre-apply it
-        ///   itemrate        the list price / MRP, kept for the record; it
-        ///                   does not drive any total
+        ///   no discount, no Net Rate   netrate 0 → server prices at MRP
+        ///   no discount, Net Rate      netrate = net
+        ///   any discount               netrate = net (PRE-discount), plus BOTH
+        ///                              discountamount (₹ for the WHOLE LINE —
+        ///                              the server divides by qty and subtracts
+        ///                              it from the rate) and discountpercent
+        ///                              (recorded only, for the print-out)
         ///
-        /// Proof: sending itemrate 999 with netrate 111 stored 111, and
-        /// sending netrate 1000 with discountpercent 10 stored 900.
+        /// The user types one of the two; the other is derived so the bill can
+        /// show both columns filled (20 % of 600 = ₹120/unit; ₹1,000 off 9,000
+        /// = 11.11 %). The stored rate still equals [PickedItem.finalRate],
+        /// which is what the local pricing mirror is checked against.
+        ///
+        /// Probed 2026-09-22: netrate 900, qty 3, discountamount 300 → stored
+        /// 800 (= 900 − 300/3), so the amount is per line, not per unit.
         ///
         /// Rates carry paise; the original code truncated with `toInt()`,
         /// which silently threw away most of a discount.
+        final id = entry.item.itemid;
+        final offPerUnit = _round2(entry.discountPerUnit);
+        final discounted = offPerUnit > 0;
+        final pct = discounted && entry.netRate > 0
+            ? _round2(offPerUnit / entry.netRate * 100)
+            : 0.0;
         final res = await callAddToCartWithNetRate(
-          itemId: entry.item.itemid ?? 0,
-          itemRate: _round2(mrpOf(entry.item)),
-          netRate: _round2(entry.netRate),
-          discountPercent: entry.discountPercent,
+          itemId: id ?? 0,
+          itemRate: _round2(entry.mrp),
+          netRate: discounted || hasNetRateOverride(id)
+              ? _round2(entry.netRate)
+              : 0,
+          discountPercent: pct,
+          discountAmount: _round2(offPerUnit * entry.qty),
+          orderType: orderType.apiValue,
           quantity: entry.qty,
           unitId: entry.item.unitid ?? 0,
         );
@@ -691,9 +917,11 @@ class QuickOrderController extends AppBaseController {
         _writeField(id, 0);
         if (entry != null) {
           pricingToStore[id] = OrderLinePricing(
-            mrp: mrpOf(entry.item),
+            mrp: entry.mrp,
             netRate: entry.netRate,
             discountPercent: entry.discountPercent,
+            discountAmount: entry.discountAmount,
+            discountType: entry.discountType,
           );
           _resetPricing(entry.item);
         }

@@ -37,6 +37,10 @@ Shree Balaji
 
 8869051509/827991
 
+Laranza
+9588293167
+Ram@1234
+
 how to build?(paste the code in terminal)o
 1)Build Split APK (smaller size)
 paste this ----------EW

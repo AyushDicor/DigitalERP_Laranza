@@ -70,6 +70,10 @@ class YourOrderController extends AppBaseController {
     /// Seed the totals from the cart so the summary and the Place Order button
     /// show real figures before the user touches either discount field.
     recalculate();
+
+    /// Order type first — it decides whether the tax rates below are worth
+    /// fetching at all.
+    await _restoreOrderType();
     _loadLinePricing();
 
     super.onInit();
@@ -156,13 +160,76 @@ class YourOrderController extends AppBaseController {
     return (item.itemrate ?? 0).toDouble();
   }
 
+  /// The line's GST rate as `cartdetailnew` reports it. The server already
+  /// zeroes it for a line added as an Estimate, and the document type here
+  /// gates it again so a stray PI line cannot tax an Estimate.
+  double gstPercentFor(GetCartListData item) {
+    if (!orderType.chargesGst) return 0;
+    return (item.gstpercent ?? 0).toDouble();
+  }
+
   OrderTotals get totals => OrderTotals.from<GetCartListData>(
         lines: cartController.cartList,
         mrpOfLine: bestMrpFor,
         netRateOf: bestNetRateFor,
         chargedRateOf: (e) => (e.itemrate ?? 0).toDouble(),
         quantityOf: (e) => (e.quantity ?? 0).toDouble(),
+        gstPercentOf: gstPercentFor,
       );
+
+  /// Goods, tax and packaging in one place. The goods half comes straight from
+  /// [totals], so this can never disagree with the Cart screen.
+  OrderBill get bill => OrderBill(
+        totals: totals,
+        packaging: PackagingCharge(packagingCharge),
+        chargesGst: orderType.chargesGst,
+      );
+
+  // Order Type / tax / packaging
+
+  /// Set on the Quick Order screen and carried here on the device; every cart
+  /// line was also stamped with it via `addtocartwithnetrate.ordertype`, and
+  /// it is posted on `placeorderlarnza`. Estimate is the default and behaves
+  /// exactly as this screen did before PI existed: no tax, no packaging.
+  OrderType orderType = OrderType.estimate;
+
+  /// GST rates arrive with the cart rows now, so there is nothing to wait for.
+  /// Kept so the bill widget's loading branch stays a one-line check.
+  bool get isLoadingGst => false;
+
+  /// Base packaging charge typed by the user, PI only. Its 18% tax and the
+  /// packaging total are derived by [PackagingCharge] and never editable.
+  double packagingCharge = 0;
+
+  final packagingController = TextEditingController();
+
+  /// Blank reads as no packaging, and negatives are refused — packaging is
+  /// optional, so an empty box must not block checkout.
+  void onPackagingTyped(String raw) {
+    final parsed = double.tryParse(raw.trim()) ?? 0;
+    packagingCharge = parsed < 0 ? 0 : parsed;
+    update();
+  }
+
+  /// Paise-safe string for the form body: `6315.95`, never `6315.9500001`.
+  static String _money(double v) =>
+      ((v * 100).roundToDouble() / 100).toStringAsFixed(2);
+
+  Future<void> _restoreOrderType() async {
+    final stored = await SharedPre.getStringValue(SharedPre.orderType);
+    orderType = OrderType.fromName(stored.isEmpty ? null : stored);
+    update();
+  }
+
+  /// Lines on a PI the server reports with no tax rate — a line added while
+  /// the type was Estimate, or an item with no GST set up — so the summary can
+  /// say the tax shown is incomplete instead of quietly undercharging.
+  int get untaxedLineCount {
+    if (!orderType.chargesGst) return 0;
+    return cartController.cartList
+        .where((e) => gstPercentFor(e) <= 0)
+        .length;
+  }
 
   /// Mirrors the customer back into storage so a change made here and the one
   /// made on the Quick Order screen cannot disagree.
@@ -212,7 +279,22 @@ class YourOrderController extends AppBaseController {
       body[RequestKeys.discountAmount] = subTotal.toString();
       body[RequestKeys.cashDiscountPercent] = cashDiscountedValue;
       body[RequestKeys.cashDiscountAmount] = grandTotal.toString();
-      body[RequestKeys.grandTotal] = grandTotal.toString();
+
+      /// `placeorderlarnza` additions (probed 2026-09-21: the order's amount
+      /// is taken from `finaltotal`, so `grandtotal` carries the same figure).
+      /// Packaging goes on both document types; on an Estimate its tax and
+      /// the product GST are 0, so the total is goods + packaging.
+      final b = bill;
+      final total = b.finalTotal;
+      body[RequestKeys.grandTotal] = _money(total);
+      body[RequestKeys.orderType] = orderType.apiValue;
+      body[RequestKeys.taxableAmount] = _money(b.taxableAmount);
+      body[RequestKeys.productGstAmount] = _money(b.productGst);
+      body[RequestKeys.packagingCharge] = _money(b.packagingBase);
+      body[RequestKeys.packagingGstPercent] =
+          PackagingCharge.gstPercent.toString();
+      body[RequestKeys.packagingGstAmount] = _money(b.packagingGst);
+      body[RequestKeys.finalTotal] = _money(total);
 
       var res = await api.orderPlace(body);
       if (res.status == 200) {
@@ -252,6 +334,7 @@ class YourOrderController extends AppBaseController {
   @override
   void onClose() {
     // TODO: implement onClose
+    packagingController.dispose();
     SharedPre.clear(SharedPre.selectedCustomer);
     SharedPre.clear(SharedPre.selectedCustomer2);
     super.onClose();

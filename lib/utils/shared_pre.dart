@@ -27,6 +27,10 @@ class SharedPre {
   static const quickOrderParty = 'quickOrderParty';
   /// Per-line MRP & discount mirror for the cart; see order_line_pricing.dart.
   static const orderLinePricing = 'orderLinePricing';
+  /// Order Type (Estimate / PI) chosen on the Quick Order screen, handed to
+  /// checkout so Your Order knows whether to add tax. The cart API has no
+  /// order-type column, so this rides alongside it like the party does.
+  static const orderType = 'orderType';
   static const  unApprovalCount = 'unApprovalCount';
   static const String currentBranchId = 'currentBranchId';        // ✅ Add this
   static const String currentBranchName = 'currentBranchName';

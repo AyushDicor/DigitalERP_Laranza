@@ -17,7 +17,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 #version: 1.1.0+23
 #version: 1.0.23+25
-version: 1.1.4+16
+version: 1.0.0+2
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -126,7 +126,7 @@ dependency_overrides:
 
 #  flutter_launcher_icons: ^0.10.0
 
-# Sources are built by tool/make_launcher_icon.dart from assets/images/logo_new.png.
+# Sources are built by tool/make_launcher_icon.dart from tool/brand/laranza_logo_1067x275.png.
 # The foreground must be transparent art with no padding of its own — the inset
 # below is what keeps the mark inside the adaptive-icon safe zone.
 flutter_launcher_icons:
@@ -135,7 +135,7 @@ flutter_launcher_icons:
   image_path: "assets/icons/app_icon.png"
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/icons/app_icon_foreground.png"
-  adaptive_icon_foreground_inset: 20
+  adaptive_icon_foreground_inset: 21
   remove_alpha_ios: true
 
 #flutter_icons:

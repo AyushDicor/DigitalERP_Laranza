@@ -50,20 +50,18 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAEu2GVILurF0XAyZdOCagQpuLHbLuwwc4',
-    appId: '1:464538135192:android:fd0a8be1f26b2fdb52beed',
-    messagingSenderId: '464538135192',
-    projectId: 'digital-erp-c1233',
-    storageBucket: 'digital-erp-c1233.appspot.com',
+    apiKey: 'AIzaSyBJt06zNBc2Wp_TuJldffbXAQhnkwu918A',
+    appId: '1:911203660778:android:e9dc938096081a460d3893',
+    messagingSenderId: '911203660778',
+    projectId: 'digitalerp-laranza',
+    storageBucket: 'digitalerp-laranza.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyCWpT42BdIO3h2KwmI4Ehe2gN8VZmuiRW4',
-    appId: '1:464538135192:ios:dbc59da6a0348d2452beed',
-    messagingSenderId: '464538135192',
-    projectId: 'digital-erp-c1233',
-    storageBucket: 'digital-erp-c1233.appspot.com',
-    iosClientId: '464538135192-s3vja4ee1bnrsnidb78rugmd295a1oaf.apps.googleusercontent.com',
-    iosBundleId: 'com.digitalerp.app',
+    apiKey: 'AIzaSyCRCKwCmwcaPil-NaZelkc5Piyv3s8Gld8',
+    appId: '1:911203660778:ios:f1d05c6f3c808f1d0d3893',
+    messagingSenderId: '911203660778',
+    projectId: 'digitalerp-laranza',
+    storageBucket: 'digitalerp-laranza.firebasestorage.app',
+    iosBundleId: 'com.laranza.app',
   );
 }

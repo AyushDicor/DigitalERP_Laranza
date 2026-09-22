@@ -72,7 +72,11 @@ class ApiMethods {
   String itemListVariant      = 'itemvarient/itemlistvarient';
   String addPartyOrCompany    = 'Addparty/addpartydetail';
   String addPartyOrCompanyNew = 'Addpartynew/addpartydetailnew';
-  String getCartDetail        = 'cartdetail/getcarddetail';
+  //String getCartDetail      = 'cartdetail/getcarddetail';
+  /// Laranza cart read: same rows as getcarddetail plus ordertype, gstpercent,
+  /// gstamount, discountpercent, discountamount per line. Returns ONE all-zero
+  /// row (id 0) when the cart is empty — filtered in the response model.
+  String getCartDetail        = 'cartdetailnew';
 
   ///  Add Costomer
   String addContactsView     = 'partycontactdetail/getpartycontact';
@@ -142,7 +146,11 @@ class ApiMethods {
 
   String removeFromCart       = 'removeitem/removecartitem';
   String removeItem           = 'removeitem/removecartitem';
-  String placeOrder           = 'placeorder/orderentry';
+  //String placeOrder         = 'placeorder/orderentry';
+  /// Laranza place-order: the orderentry fields plus ordertype, taxableamount,
+  /// productgstamount, packagingcharge, packaginggstpercent, packaginggstamount,
+  /// finaltotal. Probed 2026-09-21: the order amount is taken from finaltotal.
+  String placeOrder           = 'placeorderlarnza';
   String updateCart           = 'cardqtyupdate/productqtychange';
   String updateCartDecimalQty = 'cardqtyupdatedecimal/productqtychangedecimal';
   String cartCount            = 'cartcount/getcartcount';

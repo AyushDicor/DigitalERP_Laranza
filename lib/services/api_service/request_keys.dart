@@ -27,13 +27,24 @@ class RequestKeys {
   /// Sent to `addtocartwithnetrate`, which takes a JSON body with numeric
   /// values (unlike the form-encoded cart calls).
   ///
-  /// Roles verified against the live endpoint:
-  ///   [netRate]             the rate charged, BEFORE the line discount —
-  ///                         this is what the cart totals on.
-  ///   [itemDiscountPercent] applied by the SERVER; never pre-apply it.
+  /// Roles verified against the live Laranza endpoint (2026-09-21):
+  ///   [netRate]             the rate the line is stored at; 0 = use itemRate.
+  ///   [itemDiscountPercent] RECORDED only — fold a % into [netRate] yourself.
+  ///   [discountAmount]      APPLIED by the server: stored = netrate − amount.
   ///   [itemRate]            the list price / MRP, stored for the record only.
+  ///   [orderType]           "Estimate" / "PI" — Estimate lines get GST 0.
+  /// See AppBaseController.callAddToCartWithNetRate.
   static const String netRate = 'netrate';
   static const String itemDiscountPercent = 'discountpercent';
+  static const String orderType = 'ordertype';
+
+  /// `placeorderlarnza` header fields (all posted as strings like the rest).
+  static const String taxableAmount = 'taxableamount';
+  static const String productGstAmount = 'productgstamount';
+  static const String packagingCharge = 'packagingcharge';
+  static const String packagingGstPercent = 'packaginggstpercent';
+  static const String packagingGstAmount = 'packaginggstamount';
+  static const String finalTotal = 'finaltotal';
   static const String quantity = 'quantity';
   static const String unitId = 'unitid';
   static const String leaveStatus = 'leavestatus';

@@ -105,8 +105,11 @@ class CollectionController extends AppBaseController {
       ShowMessage.showSnackBar('Please check', 'Please add cheque Date ');
     } else if (selectedCollectionLedgerValue == null) {
       ShowMessage.showSnackBar('Please check', 'Please select collection Ledger');
-    } else if (remarkController.text.isEmpty) {
+    } else if (remarkController.text.trim().isEmpty) {
+      /// Remark is mandatory on a collection. Trimmed, so a stray space
+      /// cannot slip past, and the field is focused so the user lands on it.
       ShowMessage.showSnackBar('Please check', 'Please add Remark');
+      remarkFocus.requestFocus();
     } else if (selectedIndex == 1 && selectedImage.isEmpty) {
       ShowMessage.showSnackBar('Please check', 'Please Add cheque Image');
     } else {
@@ -230,7 +233,7 @@ class CollectionController extends AppBaseController {
         RequestKeys.paymentModeLedgerId: selectedCollectionLedgerValue.partyid.toString(),
         RequestKeys.chequeNo: chequeNoController.text,
         RequestKeys.chequeDate: chequeDate,
-        RequestKeys.remarks: remarkController.text,
+        RequestKeys.remarks: remarkController.text.trim(),
         RequestKeys.photo: selectedImageBase64.value,
         RequestKeys.filename: selectedImageFileName.value
       };

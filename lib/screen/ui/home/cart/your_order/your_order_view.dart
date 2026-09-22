@@ -1,9 +1,11 @@
+import 'package:digitalerp/utils/order_line_pricing.dart';
 import 'package:digitalerp/response/get_cart_list_response.dart';
 import 'package:digitalerp/screen/ui/home/cart/your_order/your_order_controller.dart';
 import 'package:digitalerp/utils/app_constant_new.dart';
 import 'package:digitalerp/utils/app_network_image.dart';
 import 'package:digitalerp/utils/my_app_bar_new.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
@@ -36,7 +38,7 @@ class YourOrderView extends StatelessWidget {
     final exact = ctrl.pricingFor(item.productid, item.itemrate);
 
     final chargedAtMrp = (mrp - charged).abs() < 0.01;
-    final noDiscount = exact == null || exact.discountPercent <= 0;
+    final noDiscount = exact == null || !exact.hasDiscount;
     if (chargedAtMrp && noDiscount) return null;
 
     final parts = <String>[];
@@ -46,8 +48,13 @@ class YourOrderView extends StatelessWidget {
       if ((exact.netRate - mrp).abs() > 0.01) {
         parts.add('Net ${_money(exact.netRate)}');
       }
-      if (exact.discountPercent > 0) {
-        parts.add('Disc ${_trimPct(exact.discountPercent)}%');
+
+      /// Shown the way it was entered — a flat discount reads as rupees, not
+      /// as the percentage it happens to work out to.
+      if (exact.hasDiscount) {
+        parts.add(exact.discountType == OrderDiscountType.amount
+            ? 'Disc ${_money(exact.discountAmount)}'
+            : 'Disc ${_trimPct(exact.discountPercent)}%');
       }
     } else if (!chargedAtMrp) {
       /// No local record. The split between a net-rate override and a
@@ -91,6 +98,14 @@ class YourOrderView extends StatelessWidget {
                         'Items (${ctrl.cartController.cartList.length})'),
                     const SizedBox(height: 8),
                     _items(ctrl),
+
+                    /// Packaging is an order-level charge on both document
+                    /// types (only its tax is PI-only), so it sits between the
+                    /// goods and the bill rather than among the product rows.
+                    const SizedBox(height: 18),
+                    _sectionLabel('Packaging'),
+                    const SizedBox(height: 8),
+                    _packagingCard(ctrl),
                     const SizedBox(height: 18),
                     _sectionLabel('Bill Summary'),
                     const SizedBox(height: 8),
@@ -379,22 +394,169 @@ class YourOrderView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          _amountLine('Amount', _money(ctrl.cartSubtotal)),
+
+          /// On a PI the goods line is what tax is worked out on, so it is
+          /// labelled as such; an Estimate keeps the plain "Amount" it had.
+          _amountLine(
+            ctrl.orderType.chargesGst ? 'Taxable Amount' : 'Amount',
+            _money(ctrl.cartSubtotal),
+          ),
           if (ctrl.cartShipping > 0) ...[
             const SizedBox(height: 12),
             _amountLine('Shipping', _money(ctrl.cartShipping)),
+          ],
+
+          /// Product tax is PI only — an Estimate is quoted tax-free.
+          if (ctrl.orderType.chargesGst) ...[
+            const SizedBox(height: 12),
+            _amountLine(
+              'Product GST',
+              ctrl.isLoadingGst ? '…' : _money(ctrl.bill.productGst),
+            ),
+            if (ctrl.untaxedLineCount > 0) ...[
+              const SizedBox(height: 6),
+              _note(
+                'GST rate unavailable for ${ctrl.untaxedLineCount} item(s) — '
+                'those lines are untaxed here.',
+              ),
+            ],
+          ],
+
+          /// Packaging is charged on both types; its 18% only on a PI.
+          if (ctrl.bill.packagingBase > 0) ...[
+            const SizedBox(height: 12),
+            _amountLine('Packaging Charges', _money(ctrl.bill.packagingBase)),
+            if (ctrl.orderType.chargesGst) ...[
+              const SizedBox(height: 12),
+              _amountLine(
+                'Packaging GST @ ${_trimPct(PackagingCharge.gstPercent)}%',
+                _money(ctrl.bill.packagingGst),
+              ),
+            ],
           ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Divider(height: 1, thickness: 1, color: newBorderColor),
           ),
           _amountLine(
-            'Grand Total',
-            _money(ctrl.grandTotal),
+            ctrl.orderType.chargesGst ? 'Final Total' : 'Grand Total',
+            _money(ctrl.bill.finalTotal),
             emphasised: true,
           ),
         ],
       ),
+    );
+  }
+
+  /// Packaging is a PI-only, order-level charge, so it gets its own card above
+  /// the bill rather than sitting among the product rows. Only the base amount
+  /// is typed — its 18% tax and the packaging total are derived and read-only.
+  Widget _packagingCard(YourOrderController ctrl) {
+    final packaging = PackagingCharge(ctrl.packagingCharge);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: newSurfaceColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: newBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.inventory_2_outlined,
+                  size: 15, color: newTextSecondary),
+              const SizedBox(width: 6),
+              const Text(
+                'Packaging Charges',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: newTextPrimary,
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: 120,
+                height: 38,
+                child: TextField(
+                  controller: ctrl.packagingController,
+                  onChanged: ctrl.onPackagingTyped,
+                  textAlign: TextAlign.end,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: newTextPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: '0',
+                    hintStyle:
+                        const TextStyle(color: newTextHint, fontSize: 14),
+                    prefixText: '₹ ',
+                    prefixStyle: const TextStyle(
+                        color: newTextSecondary, fontSize: 13),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: newBorderColor),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: newBorderColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: newBlueColor),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          /// The derived rows only make sense when there is tax to add — on
+          /// an Estimate the typed amount IS the packaging total.
+          if (packaging.isCharged && ctrl.orderType.chargesGst) ...[
+            const SizedBox(height: 12),
+            _amountLine(
+              'Packaging GST @ ${_trimPct(PackagingCharge.gstPercent)}%',
+              _money(packaging.gstAmount),
+            ),
+            const SizedBox(height: 10),
+            _amountLine(
+              'Total Packaging',
+              _money(packaging.total),
+              emphasised: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _note(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.info_outline_rounded, size: 13, color: newTextHint),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+                fontSize: 11, height: 1.3, color: newTextSecondary),
+          ),
+        ),
+      ],
     );
   }
 
@@ -449,13 +611,16 @@ class YourOrderView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'Grand Total',
-                  style: TextStyle(fontSize: 11, color: newTextSecondary),
+                Text(
+                  ctrl.orderType.chargesGst ? 'Final Total' : 'Grand Total',
+                  style: const TextStyle(
+                      fontSize: 11, color: newTextSecondary),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _money(ctrl.grandTotal),
+                  /// Must match the Bill Summary's bottom line, tax and
+                  /// packaging included.
+                  _money(ctrl.bill.finalTotal),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

@@ -790,7 +790,7 @@ class _CartCard extends StatelessWidget {
     final exact = controller.pricingFor(item.productid, item.itemrate);
 
     final chargedAtMrp = (mrp - charged).abs() < 0.01;
-    final noDiscount = exact == null || exact.discountPercent <= 0;
+    final noDiscount = exact == null || !exact.hasDiscount;
     if (chargedAtMrp && noDiscount) return null;
 
     final parts = <String>[];
@@ -800,8 +800,13 @@ class _CartCard extends StatelessWidget {
       if ((exact.netRate - mrp).abs() > 0.01) {
         parts.add('Net ${_money(exact.netRate)}');
       }
-      if (exact.discountPercent > 0) {
-        parts.add('Disc ${_trimPct(exact.discountPercent)}%');
+
+      /// Shown the way it was entered — a flat discount reads as rupees, not
+      /// as the percentage it happens to work out to.
+      if (exact.hasDiscount) {
+        parts.add(exact.discountType == OrderDiscountType.amount
+            ? 'Disc ${_money(exact.discountAmount)}'
+            : 'Disc ${_trimPct(exact.discountPercent)}%');
       }
     } else if (!chargedAtMrp) {
       parts.add('Rate ${_money(charged)}');
