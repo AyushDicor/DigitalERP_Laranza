@@ -274,7 +274,6 @@ class YourOrderController extends AppBaseController {
               "";
       body[RequestKeys.partyId] = selectCompany?.partyid.toString() ?? '0';
       body[RequestKeys.totalAmount] = cartSubtotal.toString();
-      body[RequestKeys.shippingAmount] = cartShipping.toString();
       body[RequestKeys.discountPercent] = discountedValue;
       body[RequestKeys.discountAmount] = subTotal.toString();
       body[RequestKeys.cashDiscountPercent] = cashDiscountedValue;
@@ -284,16 +283,25 @@ class YourOrderController extends AppBaseController {
       /// is taken from `finaltotal`, so `grandtotal` carries the same figure).
       /// Packaging goes on both document types; on an Estimate its tax and
       /// the product GST are 0, so the total is goods + packaging.
+      ///
+      /// The save proc's field names differ from the cart's (backend team,
+      /// 2026-09-23): the packaging amount IS `shippingamount` — there is no
+      /// `packagingcharge` parameter, which is why the ₹1,000 on order 33855
+      /// never reached the printout's Freight line — its tax is
+      /// `packinggstpercent`/`packinggstamt`, and the type is
+      /// `orderentrytype`. Cart lines keep `ordertype`; only this call
+      /// renames it. The cart's own `shippingamount` is not sent any more:
+      /// it is always 0 for Laranza and would blank out the packaging.
       final b = bill;
       final total = b.finalTotal;
       body[RequestKeys.grandTotal] = _money(total);
-      body[RequestKeys.orderType] = orderType.apiValue;
+      body[RequestKeys.orderEntryType] = orderType.apiValue;
       body[RequestKeys.taxableAmount] = _money(b.taxableAmount);
       body[RequestKeys.productGstAmount] = _money(b.productGst);
-      body[RequestKeys.packagingCharge] = _money(b.packagingBase);
-      body[RequestKeys.packagingGstPercent] =
-          PackagingCharge.gstPercent.toString();
-      body[RequestKeys.packagingGstAmount] = _money(b.packagingGst);
+      body[RequestKeys.shippingAmount] = _money(b.packagingBase);
+      body[RequestKeys.packingGstPercent] =
+          (b.chargesGst ? PackagingCharge.gstPercent : 0).toString();
+      body[RequestKeys.packingGstAmount] = _money(b.packagingGst);
       body[RequestKeys.finalTotal] = _money(total);
 
       var res = await api.orderPlace(body);

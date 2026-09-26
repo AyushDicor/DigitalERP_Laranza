@@ -36,14 +36,25 @@ class RequestKeys {
   /// See AppBaseController.callAddToCartWithNetRate.
   static const String netRate = 'netrate';
   static const String itemDiscountPercent = 'discountpercent';
+
+  /// Cart-line order type. Verified live 2026-09-23: `addtocartwithnetrate`
+  /// takes `ordertype` and echoes it back on `cartdetailnew`; the same value
+  /// sent as `orderentrytype` is ignored. The SAVE call spells it
+  /// differently — see [orderEntryType].
   static const String orderType = 'ordertype';
 
   /// `placeorderlarnza` header fields (all posted as strings like the rest).
+  ///
+  /// The save proc's own spellings, confirmed by the backend team
+  /// 2026-09-23: the order type is `orderentrytype` (not `ordertype`), the
+  /// packaging amount rides on `shippingamount` (there is no
+  /// `packagingcharge` parameter — it prints in the document's Freight
+  /// field), and its tax is `packinggstpercent` / `packinggstamt`.
   static const String taxableAmount = 'taxableamount';
   static const String productGstAmount = 'productgstamount';
-  static const String packagingCharge = 'packagingcharge';
-  static const String packagingGstPercent = 'packaginggstpercent';
-  static const String packagingGstAmount = 'packaginggstamount';
+  static const String orderEntryType = 'orderentrytype';
+  static const String packingGstPercent = 'packinggstpercent';
+  static const String packingGstAmount = 'packinggstamt';
   static const String finalTotal = 'finaltotal';
   static const String quantity = 'quantity';
   static const String unitId = 'unitid';
