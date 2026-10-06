@@ -194,6 +194,7 @@ class YourOrderController extends AppBaseController {
         totals: totals,
         packaging: PackagingCharge(packagingCharge),
         chargesGst: gstApplicable,
+        cashDiscountPercent: cashDiscountPercent,
       );
 
   /// What the goods come to BEFORE any discount — the figure
@@ -285,6 +286,21 @@ class YourOrderController extends AppBaseController {
       isLoadingGst = false;
       update();
     }
+  }
+
+  /// Cash discount for the whole order, typed above Packaging. Comes off the
+  /// goods BEFORE tax — see [OrderBill.cashDiscountAmount] — and is posted as
+  /// `cdpercent`/`cdamount`. Optional: left empty it is simply 0.
+  double cashDiscountPercent = 0;
+
+  final cdController = TextEditingController();
+
+  /// Blank or unparseable reads as no discount; the value is held to 0..100 so
+  /// a slip of the keyboard cannot invert the bill.
+  void onCashDiscountTyped(String raw) {
+    cashDiscountPercent =
+        (double.tryParse(raw.trim()) ?? 0).clamp(0, 100).toDouble();
+    update();
   }
 
   /// Base packaging charge typed by the user, PI only. Its 18% tax and the
@@ -383,14 +399,15 @@ class YourOrderController extends AppBaseController {
       /// against: the MRP on an Estimate (MRP → Taxable Amt), the typed Net
       /// Rate on a PI. So this total is exactly the sum of the per-line
       /// `discountamount`s already sent to the cart.
+      final b = bill;
       body[RequestKeys.totalAmount] = _money(orderGrossAmount);
       body[RequestKeys.discountPercent] = _money(orderDiscountPercent);
       body[RequestKeys.discountAmount] = _money(orderDiscountAmount);
 
-      /// Cash discount has no field on this screen, so it is genuinely zero
-      /// rather than "the grand total", which is what it used to send.
-      body[RequestKeys.cashDiscountPercent] = '0';
-      body[RequestKeys.cashDiscountAmount] = _money(0);
+      /// Cash discount, typed on this screen. Taken off the goods before tax,
+      /// so `taxableamount` below is already net of it.
+      body[RequestKeys.cashDiscountPercent] = _money(b.cashDiscountPercent);
+      body[RequestKeys.cashDiscountAmount] = _money(b.cashDiscountAmount);
 
       /// `placeorderlarnza` additions (probed 2026-09-21: the order's amount
       /// is taken from `finaltotal`, so `grandtotal` carries the same figure).
@@ -405,7 +422,6 @@ class YourOrderController extends AppBaseController {
       /// `orderentrytype`. Cart lines keep `ordertype`; only this call
       /// renames it. The cart's own `shippingamount` is not sent any more:
       /// it is always 0 for Laranza and would blank out the packaging.
-      final b = bill;
       final total = b.finalTotal;
       body[RequestKeys.grandTotal] = _money(total);
       body[RequestKeys.orderEntryType] = orderType.apiValue;
@@ -466,6 +482,7 @@ class YourOrderController extends AppBaseController {
   @override
   void onClose() {
     // TODO: implement onClose
+    cdController.dispose();
     packagingController.dispose();
     SharedPre.clear(SharedPre.selectedCustomer);
     SharedPre.clear(SharedPre.selectedCustomer2);

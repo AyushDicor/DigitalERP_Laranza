@@ -378,26 +378,50 @@ class OrderBill {
   /// False for an Estimate, which is quoted tax-free.
   final bool chargesGst;
 
+  /// Cash discount, entered once for the whole order on the Place Order
+  /// screen. Comes off the goods BEFORE tax, so it reduces the GST too.
+  /// Typically 0 — the field may simply be left empty.
+  final double cashDiscountPercent;
+
   const OrderBill({
     required this.totals,
     required this.packaging,
     required this.chargesGst,
     this.shipping = 0,
+    this.cashDiscountPercent = 0,
   });
 
-  /// What the goods come to after every discount — the figure tax is worked
-  /// out on.
-  double get taxableAmount => totals.chargedTotal;
+  /// 0 .. 100. Guards the arithmetic against a nonsense percentage reaching
+  /// the bill from anywhere.
+  double get _cdPercent => cashDiscountPercent.clamp(0, 100).toDouble();
 
-  double get productGst => chargesGst ? totals.gstTotal : 0;
+  /// What the goods come to after the per-line discounts but BEFORE the cash
+  /// discount — the figure [cashDiscountAmount] is taken off.
+  double get goodsAmount => totals.chargedTotal;
 
-  /// Packaging is charged on both document types; only its tax is PI-only.
+  double get cashDiscountAmount => goodsAmount * _cdPercent / 100;
+
+  bool get hasCashDiscount => cashDiscountAmount > 0.01;
+
+  /// The goods less the cash discount — the figure tax is worked out on.
+  double get taxableAmount => goodsAmount - cashDiscountAmount;
+
+  /// Tax on the REDUCED goods. Scaling the per-line total by the same factor
+  /// keeps each line's own GST rate intact, which charging one blended rate
+  /// on [taxableAmount] would not — lines can be taxed at different rates.
+  double get productGst =>
+      chargesGst ? totals.gstTotal * (1 - _cdPercent / 100) : 0;
+
+  /// Packaging is charged on both document types, and so is its tax. The cash
+  /// discount does not touch it: it is a discount on the goods, not on a
+  /// service charge added afterwards.
   double get packagingBase => packaging.base;
 
   double get packagingGst => chargesGst ? packaging.gstAmount : 0;
 
-  /// Order of operations: discounts are already inside [taxableAmount], tax
-  /// goes on top of that, then packaging with its own separate tax.
+  /// Order of operations: per-line discounts are already inside
+  /// [goodsAmount], the cash discount comes off next, tax goes on what is
+  /// left, then packaging with its own separate tax.
   double get finalTotal =>
       taxableAmount + productGst + packagingBase + packagingGst + shipping;
 }

@@ -103,6 +103,14 @@ class YourOrderView extends StatelessWidget {
                     /// order, Estimate and PI alike, so there is nothing to
                     /// choose. See [YourOrderController.gstApplicable].
                     ///
+                    /// Cash discount sits ABOVE packaging because it comes off
+                    /// the goods first and the tax is worked out on what is
+                    /// left; packaging is added after, with its own tax.
+                    const SizedBox(height: 18),
+                    _sectionLabel('Cash Discount'),
+                    const SizedBox(height: 8),
+                    _cashDiscountCard(ctrl),
+
                     /// Packaging is an order-level charge on both document
                     /// types, so it sits between the goods and the bill rather
                     /// than among the product rows.
@@ -399,11 +407,22 @@ class YourOrderView extends StatelessWidget {
             const SizedBox(height: 12),
           ],
 
-          /// Every order is taxed, so the goods line is always the figure
-          /// tax is worked out on.
+          /// With a cash discount the goods line is shown before it, then the
+          /// discount, then what is left — which is what tax is worked out on.
+          /// Without one the single "Taxable Amount" row says it all.
+          if (ctrl.bill.hasCashDiscount) ...[
+            _amountLine('Goods Amount', _money(ctrl.bill.goodsAmount)),
+            const SizedBox(height: 12),
+            _amountLine(
+              'Cash Discount (${_trimPct(_round2(ctrl.bill.cashDiscountPercent))}%)',
+              '− ${_money(ctrl.bill.cashDiscountAmount)}',
+              valueColor: newGreenColor,
+            ),
+            const SizedBox(height: 12),
+          ],
           _amountLine(
             'Taxable Amount',
-            _money(ctrl.cartSubtotal),
+            _money(ctrl.bill.taxableAmount),
           ),
           if (ctrl.cartShipping > 0) ...[
             const SizedBox(height: 12),
@@ -451,6 +470,109 @@ class YourOrderView extends StatelessWidget {
   /// own card above the bill rather than sitting among the product rows. Only
   /// the base amount is typed — its 18% tax and the packaging total are
   /// derived and read-only.
+  /// A percentage off the whole order, taken before tax. Optional — left
+  /// empty it is 0 and nothing below it changes. The rupee value and the
+  /// amount tax is then worked out on are shown as they are typed, so the
+  /// effect is visible without scrolling to the bill.
+  Widget _cashDiscountCard(YourOrderController ctrl) {
+    final bill = ctrl.bill;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: newSurfaceColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: newBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.percent_rounded,
+                  size: 15, color: newTextSecondary),
+              const SizedBox(width: 6),
+              const Text(
+                'CD %',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: newTextPrimary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'off the goods, before GST',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: newTextSecondary),
+                ),
+              ),
+              SizedBox(
+                width: 110,
+                height: 38,
+                child: TextField(
+                  controller: ctrl.cdController,
+                  onChanged: ctrl.onCashDiscountTyped,
+                  textAlign: TextAlign.end,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                  ],
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: newTextPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: '0',
+                    hintStyle:
+                        const TextStyle(color: newTextHint, fontSize: 14),
+                    suffixText: '%',
+                    suffixStyle: const TextStyle(
+                        color: newTextSecondary, fontSize: 13),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: newBorderColor),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: newBorderColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: newBlueColor),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (bill.hasCashDiscount) ...[
+            const SizedBox(height: 12),
+            _amountLine(
+              'Cash Discount',
+              '− ${_money(bill.cashDiscountAmount)}',
+              valueColor: newGreenColor,
+            ),
+            const SizedBox(height: 10),
+            _amountLine(
+              'Taxable after CD',
+              _money(bill.taxableAmount),
+              emphasised: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _packagingCard(YourOrderController ctrl) {
     final packaging = PackagingCharge(ctrl.packagingCharge);
     return Container(

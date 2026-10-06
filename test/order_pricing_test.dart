@@ -235,4 +235,52 @@ test('order level discount', () {
   // 5. Empty cart: no division by zero.
   const empty = OrderTotals(mrpTotal: 0, netTotal: 0, chargedTotal: 0);
   check('empty cart %', percent(empty, isPi: false), 0);
-});}
+});
+
+  test('cash discount', _cashDiscountChecks);
+}
+
+/// Cash discount: a percentage off the goods taken BEFORE tax, so it reduces
+/// the GST too. Packaging is added afterwards and is untouched by it.
+void _cashDiscountChecks() {
+  // 1200 of goods taxed at 18%, 500 packaging (+18% = 90).
+  const goods = OrderTotals(
+      mrpTotal: 1250, netTotal: 1250, chargedTotal: 1200, gstTotal: 216);
+
+  OrderBill billAt(double cd) => OrderBill(
+        totals: goods,
+        packaging: const PackagingCharge(500),
+        chargesGst: true,
+        cashDiscountPercent: cd,
+      );
+
+  // No CD — unchanged from before the field existed.
+  final none = billAt(0);
+  check('cd 0: taxable', none.taxableAmount, 1200);
+  check('cd 0: product gst', none.productGst, 216);
+  check('cd 0: final', none.finalTotal, 2006);
+  print('   cd 0: hasCashDiscount=${none.hasCashDiscount}');
+
+  // 10% off: goods 1200 -> 1080, GST follows down to 194.40, packaging as before.
+  final ten = billAt(10);
+  check('cd 10: goods', ten.goodsAmount, 1200);
+  check('cd 10: discount', ten.cashDiscountAmount, 120);
+  check('cd 10: taxable', ten.taxableAmount, 1080);
+  check('cd 10: gst on reduced base', ten.productGst, 194.40);
+  check('cd 10: packaging untouched', ten.packagingBase, 500);
+  check('cd 10: packaging gst untouched', ten.packagingGst, 90);
+  check('cd 10: final', ten.finalTotal, 1080 + 194.40 + 500 + 90);
+
+  // The scaled GST equals taxing the reduced base at the same rate.
+  check('cd 10: gst == 18% of taxable', ten.productGst, 1080 * 0.18);
+
+  // 100% off the goods leaves only packaging and its tax.
+  final all = billAt(100);
+  check('cd 100: taxable', all.taxableAmount, 0);
+  check('cd 100: product gst', all.productGst, 0);
+  check('cd 100: final = packaging only', all.finalTotal, 590);
+
+  // Out-of-range input is clamped, never inverted.
+  check('cd 150 clamps to 100', billAt(150).taxableAmount, 0);
+  check('cd -5 clamps to 0', billAt(-5).taxableAmount, 1200);
+}
