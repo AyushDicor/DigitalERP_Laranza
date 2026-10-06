@@ -99,9 +99,13 @@ class YourOrderView extends StatelessWidget {
                     const SizedBox(height: 8),
                     _items(ctrl),
 
+                    /// No GST selector: the backend calculates tax on every
+                    /// order, Estimate and PI alike, so there is nothing to
+                    /// choose. See [YourOrderController.gstApplicable].
+                    ///
                     /// Packaging is an order-level charge on both document
-                    /// types (only its tax is PI-only), so it sits between the
-                    /// goods and the bill rather than among the product rows.
+                    /// types, so it sits between the goods and the bill rather
+                    /// than among the product rows.
                     const SizedBox(height: 18),
                     _sectionLabel('Packaging'),
                     const SizedBox(height: 8),
@@ -395,10 +399,10 @@ class YourOrderView extends StatelessWidget {
             const SizedBox(height: 12),
           ],
 
-          /// On a PI the goods line is what tax is worked out on, so it is
-          /// labelled as such; an Estimate keeps the plain "Amount" it had.
+          /// Every order is taxed, so the goods line is always the figure
+          /// tax is worked out on.
           _amountLine(
-            ctrl.orderType.chargesGst ? 'Taxable Amount' : 'Amount',
+            'Taxable Amount',
             _money(ctrl.cartSubtotal),
           ),
           if (ctrl.cartShipping > 0) ...[
@@ -406,40 +410,35 @@ class YourOrderView extends StatelessWidget {
             _amountLine('Shipping', _money(ctrl.cartShipping)),
           ],
 
-          /// Product tax is PI only — an Estimate is quoted tax-free.
-          if (ctrl.orderType.chargesGst) ...[
-            const SizedBox(height: 12),
-            _amountLine(
-              'Product GST',
-              ctrl.isLoadingGst ? '…' : _money(ctrl.bill.productGst),
+          const SizedBox(height: 12),
+          _amountLine(
+            'Product GST',
+            ctrl.isLoadingGst ? '…' : _money(ctrl.bill.productGst),
+          ),
+          if (ctrl.untaxedLineCount > 0) ...[
+            const SizedBox(height: 6),
+            _note(
+              'GST rate unavailable for ${ctrl.untaxedLineCount} item(s) — '
+              'those lines are untaxed here.',
             ),
-            if (ctrl.untaxedLineCount > 0) ...[
-              const SizedBox(height: 6),
-              _note(
-                'GST rate unavailable for ${ctrl.untaxedLineCount} item(s) — '
-                'those lines are untaxed here.',
-              ),
-            ],
           ],
 
-          /// Packaging is charged on both types; its 18% only on a PI.
+          /// Packaging is charged on both document types, and so is its 18%.
           if (ctrl.bill.packagingBase > 0) ...[
             const SizedBox(height: 12),
             _amountLine('Packaging Charges', _money(ctrl.bill.packagingBase)),
-            if (ctrl.orderType.chargesGst) ...[
-              const SizedBox(height: 12),
-              _amountLine(
-                'Packaging GST @ ${_trimPct(PackagingCharge.gstPercent)}%',
-                _money(ctrl.bill.packagingGst),
-              ),
-            ],
+            const SizedBox(height: 12),
+            _amountLine(
+              'Packaging GST @ ${_trimPct(PackagingCharge.gstPercent)}%',
+              _money(ctrl.bill.packagingGst),
+            ),
           ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Divider(height: 1, thickness: 1, color: newBorderColor),
           ),
           _amountLine(
-            ctrl.orderType.chargesGst ? 'Final Total' : 'Grand Total',
+            'Final Total',
             _money(ctrl.bill.finalTotal),
             emphasised: true,
           ),
@@ -448,9 +447,10 @@ class YourOrderView extends StatelessWidget {
     );
   }
 
-  /// Packaging is a PI-only, order-level charge, so it gets its own card above
-  /// the bill rather than sitting among the product rows. Only the base amount
-  /// is typed — its 18% tax and the packaging total are derived and read-only.
+  /// Packaging is an order-level charge on both document types, so it gets its
+  /// own card above the bill rather than sitting among the product rows. Only
+  /// the base amount is typed — its 18% tax and the packaging total are
+  /// derived and read-only.
   Widget _packagingCard(YourOrderController ctrl) {
     final packaging = PackagingCharge(ctrl.packagingCharge);
     return Container(
@@ -523,9 +523,8 @@ class YourOrderView extends StatelessWidget {
               ),
             ],
           ),
-          /// The derived rows only make sense when there is tax to add — on
-          /// an Estimate the typed amount IS the packaging total.
-          if (packaging.isCharged && ctrl.orderType.chargesGst) ...[
+          /// Both rows are derived from the typed amount and never editable.
+          if (packaging.isCharged) ...[
             const SizedBox(height: 12),
             _amountLine(
               'Packaging GST @ ${_trimPct(PackagingCharge.gstPercent)}%',
@@ -612,7 +611,7 @@ class YourOrderView extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  ctrl.orderType.chargesGst ? 'Final Total' : 'Grand Total',
+                  'Final Total',
                   style: const TextStyle(
                       fontSize: 11, color: newTextSecondary),
                 ),

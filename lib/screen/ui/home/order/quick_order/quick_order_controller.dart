@@ -143,6 +143,24 @@ class QuickOrderController extends AppBaseController {
     if (type == orderType) return;
     orderType = type;
 
+    /// An Estimate shows no discount boxes, so anything typed into them on a
+    /// PI is dropped on the way over rather than left to price a line the
+    /// user can no longer see.
+    if (!type.showsDiscountFields) {
+      _discounts.clear();
+      _discountAmounts.clear();
+      for (final c in _discCtrls.values) {
+        c.text = '';
+      }
+      for (final c in _discAmtCtrls.values) {
+        c.text = '';
+      }
+      for (final entry in picked.values) {
+        entry.discountPercent = 0;
+        entry.discountAmount = 0;
+      }
+    }
+
     if (!type.allowsMrpEdit && _mrps.isNotEmpty) {
       final ids = _mrps.keys.toList();
       _mrps.clear();
@@ -190,7 +208,13 @@ class QuickOrderController extends AppBaseController {
       _discountTypes[itemId] ?? OrderDiscountType.percent;
 
   /// Rupees off one unit, whichever way the line's discount was entered.
+  ///
+  /// Always 0 on an Estimate: that type has no discount boxes at all — its
+  /// discount is the MRP-to-Taxable-Amount gap, worked out at save time by
+  /// [derivedDiscountPerUnitOf] — so a value typed on a PI before switching
+  /// type can never quietly re-price an Estimate line.
   double discountPerUnitOf(ProductDataList item) {
+    if (!orderType.showsDiscountFields) return 0;
     final net = netRateOf(item);
     if (net <= 0) return 0;
     final id = item.itemid;
@@ -198,6 +222,21 @@ class QuickOrderController extends AppBaseController {
         ? discountAmountOf(id)
         : net * discountOf(id) / 100;
     return off.clamp(0, net).toDouble();
+  }
+
+  /// The Estimate's implicit discount: what one unit is being sold below its
+  /// MRP. The user types an MRP and a Taxable Amount; the gap between them is
+  /// posted as `discountamount`/`discountpercent` so the printed document
+  /// still shows both columns, but it is never presented as a discount box on
+  /// this screen.
+  ///
+  /// Zero on a PI, where the discount is typed rather than derived.
+  double derivedDiscountPerUnitOf(ProductDataList item) {
+    if (orderType.showsDiscountFields) return 0;
+    final mrp = mrpOf(item);
+    if (mrp <= 0) return 0;
+    final off = mrp - netRateOf(item);
+    return off <= 0 ? 0 : off.clamp(0, mrp).toDouble();
   }
 
   /// Net rate less the line discount — the figure that reaches the cart.
@@ -626,6 +665,19 @@ class QuickOrderController extends AppBaseController {
     final id = item.itemid;
     if (id == null) return;
 
+    /// The company is mandatory before anything can be staged. Checking only
+    /// at Add-All let a user price a whole basket and be told at the last
+    /// step; refusing the first quantity points them at the field instead.
+    /// Removing a line is always allowed, so a basket staged before the rule
+    /// can still be emptied.
+    if (qty > 0 && !requireParty()) {
+      /// Nothing was staged, so the box must not keep showing the number —
+      /// including when the quantity was typed rather than stepped.
+      _writeField(id, 0);
+      update([rowId(id), bottomBarId]);
+      return;
+    }
+
     if (qty <= 0) {
       picked.remove(id);
     } else {
@@ -652,6 +704,18 @@ class QuickOrderController extends AppBaseController {
     if (ctrl.text == text) return;
     ctrl.text = text;
     ctrl.selection = TextSelection.collapsed(offset: text.length);
+  }
+
+  /// True when a company is selected. Otherwise it says so and returns false,
+  /// so every caller can simply `if (!requireParty()) return;`.
+  ///
+  /// A Customer-type user always orders for their own account, which the
+  /// screen fills in and locks, so they are never asked.
+  bool requireParty() {
+    if (isCustomerUser || selectedParty?.partyid != null) return true;
+    ShowMessage.showSnackBar('Company required',
+        'Select a company before adding items to the order');
+    return false;
   }
 
   void increaseQty(ProductDataList item) => setQty(item, qtyOf(item.itemid) + 1);
@@ -814,10 +878,7 @@ class QuickOrderController extends AppBaseController {
   Future<void> addAllToCart() async {
     if (isAddingToCart) return;
 
-    if (selectedParty?.partyid == null) {
-      ShowMessage.showSnackBar('', 'Please select a company first');
-      return;
-    }
+    if (!requireParty()) return;
     if (picked.isEmpty) {
       ShowMessage.showSnackBar('', 'Enter a quantity for at least one item');
       return;
@@ -863,18 +924,28 @@ class QuickOrderController extends AppBaseController {
         ///
         /// Rates carry paise; the original code truncated with `toInt()`,
         /// which silently threw away most of a discount.
+        ///
+        /// An **Estimate** has no discount boxes, so its discount is derived:
+        /// the line is posted at `netrate = MRP` with the MRP-to-Taxable-Amount
+        /// gap as `discountamount`, which lands the stored rate back on the
+        /// Taxable Amount the user typed (server: rate = netrate − amount/qty)
+        /// and fills both discount columns on the printed document. Nothing
+        /// about this is shown on screen.
         final id = entry.item.itemid;
-        final offPerUnit = _round2(entry.discountPerUnit);
+        final derived = !orderType.showsDiscountFields;
+        final offPerUnit = _round2(
+            derived ? derivedDiscountPerUnitOf(entry.item) : entry.discountPerUnit);
         final discounted = offPerUnit > 0;
-        final pct = discounted && entry.netRate > 0
-            ? _round2(offPerUnit / entry.netRate * 100)
-            : 0.0;
+
+        /// The rate the discount is measured against: the MRP on an Estimate,
+        /// the typed Net Rate on a PI.
+        final base = derived ? entry.mrp : entry.netRate;
+        final pct =
+            discounted && base > 0 ? _round2(offPerUnit / base * 100) : 0.0;
         final res = await callAddToCartWithNetRate(
           itemId: id ?? 0,
           itemRate: _round2(entry.mrp),
-          netRate: discounted || hasNetRateOverride(id)
-              ? _round2(entry.netRate)
-              : 0,
+          netRate: discounted || hasNetRateOverride(id) ? _round2(base) : 0,
           discountPercent: pct,
           discountAmount: _round2(offPerUnit * entry.qty),
           orderType: orderType.apiValue,
@@ -916,11 +987,16 @@ class QuickOrderController extends AppBaseController {
         final entry = picked.remove(id);
         _writeField(id, 0);
         if (entry != null) {
+          /// The mirror records what the line is CHARGED at, which is what
+          /// the cart holds. On an Estimate that is the Taxable Amount with
+          /// no discount on top — the derived discount posted above is a
+          /// presentation of the MRP gap, not a second reduction.
+          final derivedLine = !orderType.showsDiscountFields;
           pricingToStore[id] = OrderLinePricing(
             mrp: entry.mrp,
             netRate: entry.netRate,
-            discountPercent: entry.discountPercent,
-            discountAmount: entry.discountAmount,
+            discountPercent: derivedLine ? 0 : entry.discountPercent,
+            discountAmount: derivedLine ? 0 : entry.discountAmount,
             discountType: entry.discountType,
           );
           _resetPricing(entry.item);

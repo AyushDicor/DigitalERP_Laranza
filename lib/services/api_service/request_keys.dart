@@ -53,6 +53,12 @@ class RequestKeys {
   static const String taxableAmount = 'taxableamount';
   static const String productGstAmount = 'productgstamount';
   static const String orderEntryType = 'orderentrytype';
+
+  /// Whether the order is taxed, added by the backend 2026-09-30. Takes the
+  /// literal `Gstcalculation` or `Gstnotcalculation` — see
+  /// [OrderGstMode.apiValue]. Independent of [orderEntryType]: an Estimate can
+  /// be raised either way.
+  static const String orderGstType = 'ordergsttype';
   static const String packingGstPercent = 'packinggstpercent';
   static const String packingGstAmount = 'packinggstamt';
   static const String finalTotal = 'finaltotal';

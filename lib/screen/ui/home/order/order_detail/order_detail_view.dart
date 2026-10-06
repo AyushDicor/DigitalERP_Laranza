@@ -444,8 +444,10 @@ class OrderDetailView extends StatelessWidget {
                         ],
                         Expanded(
                           child: Obx(() => _actionButton(
-                                icon: Icons.share_outlined,
-                                label: 'Share PDF',
+                                /// Opens the document on screen; Download and
+                                /// Share live on the preview itself.
+                                icon: Icons.picture_as_pdf_outlined,
+                                label: 'View PDF',
                                 primary: true,
                                 busy: controller.isPressed.value,
                                 onTap: () =>

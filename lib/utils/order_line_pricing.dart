@@ -20,17 +20,46 @@ enum OrderType {
   /// The literal the backend is expected to take once the column exists.
   String get apiValue => this == OrderType.pi ? 'PI' : 'Estimate';
 
-  /// A PI is a tax document, so product GST and packaging tax are added to
-  /// its total. An Estimate is a quotation and stays tax-free — this is what
-  /// keeps the existing Estimate arithmetic untouched.
-  bool get chargesGst => this == OrderType.pi;
-
+  /// Tax does NOT depend on the document type. Both an Estimate and a PI are
+  /// taxed — the backend calculates GST on every order (2026-10-06), so the
+  /// Place Order screen no longer offers a choice and the bill takes its own
+  /// [OrderBill.chargesGst] flag, which the app always sets.
+  ///
   /// On a PI the product's price is the item-master rate and may not be
   /// retyped; only the Net Rate below it can move.
   bool get allowsMrpEdit => this == OrderType.estimate;
 
+  /// A PI's discount is typed per line (type + % or ₹). An Estimate has no
+  /// discount boxes: the user types an MRP and a Taxable Amount and the gap
+  /// between them IS the discount, derived at save time and posted without
+  /// ever being shown.
+  bool get showsDiscountFields => this == OrderType.pi;
+
+  /// What the editable per-unit rate is called on the line. On an Estimate it
+  /// is the figure tax would be worked out on, so it is labelled as such.
+  String get rateFieldLabel =>
+      this == OrderType.pi ? 'Net Rate' : 'Taxable Amt';
+
   static OrderType fromName(String? name) =>
       name == OrderType.pi.name ? OrderType.pi : OrderType.estimate;
+}
+
+/// Whether the order is taxed, as `placeorderlarnza` spells it.
+///
+/// The backend added `ordergsttype` on 2026-09-30 to carry the Place Order
+/// screen's GST selector. It is independent of [OrderType]: an Estimate is
+/// raised either way, a PI is always [calculated].
+enum OrderGstMode {
+  calculated,
+  notCalculated;
+
+  /// The exact literals the save proc expects — capitalised just like this,
+  /// not `GSTCalculation`.
+  String get apiValue =>
+      this == OrderGstMode.calculated ? 'Gstcalculation' : 'Gstnotcalculation';
+
+  static OrderGstMode of(bool gstApplicable) =>
+      gstApplicable ? OrderGstMode.calculated : OrderGstMode.notCalculated;
 }
 
 /// How a line's discount was expressed. Only ever one of the two — switching

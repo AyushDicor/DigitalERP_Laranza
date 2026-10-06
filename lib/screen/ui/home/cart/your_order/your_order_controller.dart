@@ -71,8 +71,14 @@ class YourOrderController extends AppBaseController {
     /// show real figures before the user touches either discount field.
     recalculate();
 
-    /// Order type first — it decides whether the tax rates below are worth
-    /// fetching at all.
+    /// The company picked on the Quick Order screen is applied here, BEFORE
+    /// the party list loads. It used to be applied inside
+    /// [getPartyDropdownList], which meant a slow or failed party call left
+    /// checkout asking for a company the user had already chosen.
+    await _applyQuickOrderParty();
+
+    /// Order type drives the labels and what the save call posts; it also
+    /// pulls the per-item tax rates, which every order now needs.
     await _restoreOrderType();
     _loadLinePricing();
 
@@ -160,12 +166,17 @@ class YourOrderController extends AppBaseController {
     return (item.itemrate ?? 0).toDouble();
   }
 
-  /// The line's GST rate as `cartdetailnew` reports it. The server already
-  /// zeroes it for a line added as an Estimate, and the document type here
-  /// gates it again so a stray PI line cannot tax an Estimate.
+  /// The line's GST rate, or 0 while the order is being quoted tax-free.
+  ///
+  /// `cartdetailnew` reports 0 for every line added as an Estimate, so when an
+  /// Estimate is switched to "GST Applicable" the rate has to come from
+  /// somewhere else: [_gstByItemId], filled by [loadGstPercents] from
+  /// `itemdetail`. The cart's own rate still wins when it has one.
   double gstPercentFor(GetCartListData item) {
-    if (!orderType.chargesGst) return 0;
-    return (item.gstpercent ?? 0).toDouble();
+    if (!gstApplicable) return 0;
+    final fromCart = (item.gstpercent ?? 0).toDouble();
+    if (fromCart > 0) return fromCart;
+    return _gstByItemId[item.productid] ?? 0;
   }
 
   OrderTotals get totals => OrderTotals.from<GetCartListData>(
@@ -182,8 +193,33 @@ class YourOrderController extends AppBaseController {
   OrderBill get bill => OrderBill(
         totals: totals,
         packaging: PackagingCharge(packagingCharge),
-        chargesGst: orderType.chargesGst,
+        chargesGst: gstApplicable,
       );
+
+  /// What the goods come to BEFORE any discount — the figure
+  /// [orderDiscountAmount] is taken off.
+  ///
+  /// Measured from whichever rate the document discounts against, matching
+  /// how each line was sent to the cart: an Estimate is priced down from the
+  /// MRP, a PI from the typed Net Rate.
+  double get orderGrossAmount {
+    final t = totals;
+    return orderType.showsDiscountFields ? t.netTotal : t.mrpTotal;
+  }
+
+  /// Total rupees taken off the order — on an Estimate the MRP-to-Taxable-Amt
+  /// gap across every line, on a PI the typed line discounts. Never negative:
+  /// a line priced ABOVE its MRP is not a discount of minus something.
+  double get orderDiscountAmount {
+    final off = orderGrossAmount - totals.chargedTotal;
+    return off > 0.01 ? off : 0;
+  }
+
+  double get orderDiscountPercent {
+    final gross = orderGrossAmount;
+    if (gross <= 0) return 0;
+    return orderDiscountAmount / gross * 100;
+  }
 
   // Order Type / tax / packaging
 
@@ -193,9 +229,63 @@ class YourOrderController extends AppBaseController {
   /// exactly as this screen did before PI existed: no tax, no packaging.
   OrderType orderType = OrderType.estimate;
 
-  /// GST rates arrive with the cart rows now, so there is nothing to wait for.
-  /// Kept so the bill widget's loading branch stays a one-line check.
-  bool get isLoadingGst => false;
+  /// Whether tax is charged on this order. Always true.
+  ///
+  /// There was a "Gst as per applicable" / "Gst Calculation" selector here
+  /// until 2026-10-06, when the backend ruled that every order is taxed —
+  /// Estimate and PI alike — so the choice was removed and this pinned on.
+  /// It stays a named flag rather than being inlined because it is the single
+  /// point the bill, the labels, the packaging tax and `ordergsttype` all read
+  /// from; if the rule changes again, only this has to move.
+  final bool gstApplicable = true;
+
+  /// Rates fetched from `itemdetail` for lines the cart reports as untaxed —
+  /// every line of an Estimate. Keyed by item id.
+  final Map<int, double> _gstByItemId = {};
+
+  /// True while those rates are in flight, so the summary can say the tax is
+  /// still being worked out instead of showing a wrong zero.
+  bool isLoadingGst = false;
+
+  /// Fills [_gstByItemId] for every cart line the server reports with no tax
+  /// rate. One `itemdetail` call per item, in parallel; failures leave the
+  /// line at 0, which [untaxedLineCount] then surfaces on the summary rather
+  /// than quietly undercharging.
+  Future<void> loadGstPercents() async {
+    final ids = <int>{};
+    for (final line in cartController.cartList) {
+      final id = line.productid;
+      if (id == null) continue;
+      if ((line.gstpercent ?? 0) > 0) continue;
+      if (_gstByItemId.containsKey(id)) continue;
+      ids.add(id);
+    }
+    if (ids.isEmpty) return;
+
+    isLoadingGst = true;
+    update();
+    try {
+      final compId = homeController.currentUserData?.compId ?? 0;
+      final results = await Future.wait(ids.map((id) async {
+        try {
+          final res = await api.getItemDetail(compid: compId, itemid: id);
+          return MapEntry(id, res.data?.gstpercent ?? 0);
+        } catch (_) {
+          return MapEntry(id, 0.0);
+        }
+      }));
+      for (final entry in results) {
+        if (entry.value > 0) _gstByItemId[entry.key] = entry.value.toDouble();
+      }
+
+      /// Write the rates back into the local mirror too, so the Cart screen
+      /// and a later visit to this screen start with them already known.
+      await OrderLinePricingStore.mergeGstPercents(_gstByItemId);
+    } finally {
+      isLoadingGst = false;
+      update();
+    }
+  }
 
   /// Base packaging charge typed by the user, PI only. Its 18% tax and the
   /// packaging total are derived by [PackagingCharge] and never editable.
@@ -219,13 +309,18 @@ class YourOrderController extends AppBaseController {
     final stored = await SharedPre.getStringValue(SharedPre.orderType);
     orderType = OrderType.fromName(stored.isEmpty ? null : stored);
     update();
+
+    /// Every order is taxed now, so the per-item rates are always needed —
+    /// including on an Estimate, whose cart lines the server stamps with
+    /// `gstpercent 0`.
+    await loadGstPercents();
   }
 
-  /// Lines on a PI the server reports with no tax rate — a line added while
-  /// the type was Estimate, or an item with no GST set up — so the summary can
-  /// say the tax shown is incomplete instead of quietly undercharging.
+  /// Lines still with no tax rate while tax is being charged — an item with
+  /// no GST set up, or one whose `itemdetail` lookup failed — so the summary
+  /// can say the tax shown is incomplete instead of quietly undercharging.
   int get untaxedLineCount {
-    if (!orderType.chargesGst) return 0;
+    if (!gstApplicable) return 0;
     return cartController.cartList
         .where((e) => gstPercentFor(e) <= 0)
         .length;
@@ -273,16 +368,34 @@ class YourOrderController extends AppBaseController {
               homeController.currentUserData?.accountCode.toString() ??
               "";
       body[RequestKeys.partyId] = selectCompany?.partyid.toString() ?? '0';
-      body[RequestKeys.totalAmount] = cartSubtotal.toString();
-      body[RequestKeys.discountPercent] = discountedValue;
-      body[RequestKeys.discountAmount] = subTotal.toString();
-      body[RequestKeys.cashDiscountPercent] = cashDiscountedValue;
-      body[RequestKeys.cashDiscountAmount] = grandTotal.toString();
+
+      /// Order-level money, in the three figures that have to agree:
+      /// `totalamount − discountamount = taxableamount`.
+      ///
+      /// These used to carry the running totals instead of the discount —
+      /// `discountamount` held the whole subtotal and `cdamount` the grand
+      /// total, so an order with no discount at all posted
+      /// `discountpercent 0` next to `discountamount 900`. The two typed
+      /// discount boxes those values came from were dropped in the redesign;
+      /// the discount now comes from how the lines were priced.
+      ///
+      /// The base is the same one each line measures its own discount
+      /// against: the MRP on an Estimate (MRP → Taxable Amt), the typed Net
+      /// Rate on a PI. So this total is exactly the sum of the per-line
+      /// `discountamount`s already sent to the cart.
+      body[RequestKeys.totalAmount] = _money(orderGrossAmount);
+      body[RequestKeys.discountPercent] = _money(orderDiscountPercent);
+      body[RequestKeys.discountAmount] = _money(orderDiscountAmount);
+
+      /// Cash discount has no field on this screen, so it is genuinely zero
+      /// rather than "the grand total", which is what it used to send.
+      body[RequestKeys.cashDiscountPercent] = '0';
+      body[RequestKeys.cashDiscountAmount] = _money(0);
 
       /// `placeorderlarnza` additions (probed 2026-09-21: the order's amount
       /// is taken from `finaltotal`, so `grandtotal` carries the same figure).
-      /// Packaging goes on both document types; on an Estimate its tax and
-      /// the product GST are 0, so the total is goods + packaging.
+      /// Packaging and its 18% go on both document types, as does product
+      /// GST — every order is taxed.
       ///
       /// The save proc's field names differ from the cart's (backend team,
       /// 2026-09-23): the packaging amount IS `shippingamount` — there is no
@@ -296,11 +409,15 @@ class YourOrderController extends AppBaseController {
       final total = b.finalTotal;
       body[RequestKeys.grandTotal] = _money(total);
       body[RequestKeys.orderEntryType] = orderType.apiValue;
+
+      /// Always `Gstcalculation` — both document types are taxed. Still sent
+      /// as its own field because the backend keeps it separate from
+      /// `orderentrytype`.
+      body[RequestKeys.orderGstType] = OrderGstMode.of(gstApplicable).apiValue;
       body[RequestKeys.taxableAmount] = _money(b.taxableAmount);
       body[RequestKeys.productGstAmount] = _money(b.productGst);
       body[RequestKeys.shippingAmount] = _money(b.packagingBase);
-      body[RequestKeys.packingGstPercent] =
-          (b.chargesGst ? PackagingCharge.gstPercent : 0).toString();
+      body[RequestKeys.packingGstPercent] = PackagingCharge.gstPercent.toString();
       body[RequestKeys.packingGstAmount] = _money(b.packagingGst);
       body[RequestKeys.finalTotal] = _money(total);
 
@@ -328,10 +445,17 @@ class YourOrderController extends AppBaseController {
       body[RequestKeys.branchId] = homeController.currentUserData?.branchId.toString() ?? '122';
       var res = await api.getPartyDropdownList(body);
       if (res.status == 200) {
-        getCustomerData();
         partyList = res.data??[];
         partyList.addAll(res.data!);
-        await _applyQuickOrderParty();
+
+        /// Only consulted when nothing has been chosen yet. [getCustomerData]
+        /// is async and used to run first, resuming after the Quick Order
+        /// party had been applied and overwriting it with a stale visit-plan
+        /// customer (or an empty one).
+        if (selectCompany?.partyid == null) {
+          getCustomerData();
+          await _applyQuickOrderParty();
+        }
         update();
       }
     } catch (e) {
@@ -405,8 +529,13 @@ class YourOrderController extends AppBaseController {
           partyname: dataList.customername,
         );
 
-        selectCompany = selectParty;
-        update();
+        /// Never overrides a company already chosen on the Quick Order
+        /// screen — this one comes from a visit plan opened at some earlier
+        /// point and is only a fallback.
+        if (selectCompany?.partyid == null) {
+          selectCompany = selectParty;
+          update();
+        }
       }
     }
   }

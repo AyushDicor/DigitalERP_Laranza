@@ -1058,7 +1058,10 @@ class _OrderSummary extends StatelessWidget {
           _summaryRow('Total', _money(total), bold: true),
           const SizedBox(height: 16),
 
-          // Place Order button
+          /// Goes to the Place Order screen, where the customer, tax and
+          /// packaging are still to be confirmed — so it must not read as the
+          /// final action. "Place Order" belongs to the button on THAT screen;
+          /// this one says where it leads, with an arrow to match.
           SizedBox(
             width: double.infinity,
             height: 52,
@@ -1071,13 +1074,21 @@ class _OrderSummary extends StatelessWidget {
                 ),
                 elevation: 0,
               ),
-              child: const Text(
-                'Place Order',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Proceed to Checkout',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward_rounded,
+                      size: 18, color: Colors.white),
+                ],
               ),
             ),
           ),

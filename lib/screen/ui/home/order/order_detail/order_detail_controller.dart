@@ -27,6 +27,16 @@ class OrderDetailController extends AppBaseController {
   PartyBalanceDetailData? partyBalanceDetailData;
   PdfReportAnalysisApi pdfReportAnalysisApi = PdfReportAnalysisApi();
   String? downloadUrl;
+
+  /// File name for the saved/shared PDF, from the order number with the
+  /// characters a file system will not take ("Laranza/02245/22-22" ->
+  /// "Laranza-02245-22-22"). Falls back to the order id.
+  String get _pdfFileName {
+    final no = (orderDetailData?.orderno ?? '').trim();
+    if (no.isEmpty) return 'Order-${orderId ?? ''}';
+    return no.replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-');
+  }
+
   List<String> statusList = [
     'Approved',
     'Pending',
@@ -64,16 +74,18 @@ class OrderDetailController extends AppBaseController {
         orderDetailPdfDownload = res.data!.first;
         downloadUrl = orderDetailPdfDownload?.url ?? '';
 
-        /// new way
-        downloadAndSharePdfFile(
+        /// Opens the document on screen first, with Download and Share as
+        /// separate actions. It used to go straight to the OS share sheet, so
+        /// the only way to read your own order was to send it somewhere.
+        isPressed.value = false;
+        openPdfPreview(
           downloadUrl: downloadUrl ?? '',
-          pdfFileName: 'pdfFile${DateTime.now().millisecond}',
-        ).then((value) => isPressed.value = false);
 
-        ///old way
-        /*
-        shareAndDownloadPdfFile(downloadUrl);
-         */
+          /// Named after the order, not a millisecond counter — this is the
+          /// name the saved/shared file carries.
+          pdfFileName: _pdfFileName,
+          title: orderDetailData?.orderno ?? 'Order',
+        );
         update();
       } else {
         ShowMessage.showSnackBar('Failed Server Res', res.message.toString());

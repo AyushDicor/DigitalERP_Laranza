@@ -512,15 +512,18 @@ class QuickOrderView extends StatelessWidget {
     );
   }
 
-  /// The per-line pricing controls: MRP (Estimate only), Net Rate, and one
-  /// discount expressed either way.
+  /// The per-line pricing controls, which differ by document type.
   ///
-  /// Net Rate replaces the MRP, then the discount comes off the Net Rate — the
-  /// two are independent, so a line can be repriced, discounted, or both. The
-  /// MRP box appears only on an Estimate; a PI prices off the item master and
-  /// the field is hidden rather than disabled, so there is nothing to tap.
+  /// **Estimate** — MRP and Taxable Amt, nothing else. The gap between the two
+  /// is the discount; it is derived when the line is added to the cart and
+  /// posted, but deliberately never shown here.
+  ///
+  /// **PI** — the item-master rate is authoritative, so the MRP box is hidden
+  /// rather than disabled (nothing to tap) and the line is priced with a Net
+  /// Rate plus one discount expressed either as a percentage or in rupees.
   Widget _pricingRow(QuickOrderController ctrl, ProductDataList item) {
     final editableMrp = ctrl.orderType.allowsMrpEdit;
+    final showsDiscount = ctrl.orderType.showsDiscountFields;
     final discountType = ctrl.discountTypeOf(item.itemid);
     final byAmount = discountType == OrderDiscountType.amount;
 
@@ -545,7 +548,7 @@ class QuickOrderView extends StatelessWidget {
             ],
             Expanded(
               child: _pricingField(
-                label: 'Net Rate',
+                label: ctrl.orderType.rateFieldLabel,
 
                 /// Always hints '0', never the MRP — the box is for a rate the
                 /// user chooses to override with, and echoing the MRP made an
@@ -558,38 +561,40 @@ class QuickOrderView extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: _discountTypePicker(ctrl, item, discountType),
-            ),
-            const SizedBox(width: 10),
+        if (showsDiscount) ...[
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: _discountTypePicker(ctrl, item, discountType),
+              ),
+              const SizedBox(width: 10),
 
-            /// One field, swapped by type — the other value is cleared by the
-            /// controller, so the two discounts can never both be live.
-            Expanded(
-              child: byAmount
-                  ? _pricingField(
-                      key: ValueKey('disc_amt_${item.itemid}'),
-                      label: 'Discount Amount',
-                      prefix: '₹ ',
-                      hint: '0',
-                      controller: ctrl.discAmtCtrl(item),
-                      onChanged: (v) => ctrl.onDiscountAmountTyped(item, v),
-                    )
-                  : _pricingField(
-                      key: ValueKey('disc_pct_${item.itemid}'),
-                      label: 'Discount %',
-                      suffix: '%',
-                      hint: '0',
-                      controller: ctrl.discCtrl(item),
-                      onChanged: (v) => ctrl.onDiscountTyped(item, v),
-                    ),
-            ),
-          ],
-        ),
+              /// One field, swapped by type — the other value is cleared by
+              /// the controller, so the two discounts can never both be live.
+              Expanded(
+                child: byAmount
+                    ? _pricingField(
+                        key: ValueKey('disc_amt_${item.itemid}'),
+                        label: 'Discount Amount',
+                        prefix: '₹ ',
+                        hint: '0',
+                        controller: ctrl.discAmtCtrl(item),
+                        onChanged: (v) => ctrl.onDiscountAmountTyped(item, v),
+                      )
+                    : _pricingField(
+                        key: ValueKey('disc_pct_${item.itemid}'),
+                        label: 'Discount %',
+                        suffix: '%',
+                        hint: '0',
+                        controller: ctrl.discCtrl(item),
+                        onChanged: (v) => ctrl.onDiscountTyped(item, v),
+                      ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }

@@ -1,47 +1,38 @@
-# Laranza App — Order Type / PI: Backend Status (21 Sep 2026)
+# Laranza App — Order module: backend status (6 Oct 2026)
 
-Base URL: `http://supportapi.digitalerp.biz/api/` · compid 59 · test user 510708 (PRAVEEN JAIN)
+Base URL `http://supportapi.digitalerp.biz/api/` · compid 59 · test user 510708 (PRAVEEN JAIN)
 
-The three new endpoints are live and the app now uses them. Verified end-to-end from the app:
-order **Laranza/02242/22-22** (PI, 2 × Thali @ 25 % + packaging ₹500) placed for ₹1,696.
+## Done on the app side
 
----
+- **GST selector removed.** As instructed, there is no longer a choice on the Place Order
+  screen: every order posts `ordergsttype=Gstcalculation`, Estimate and PI alike.
+- Product GST, Packaging Charges and Packaging GST @ 18 % now apply to both document types.
+- `orderentrytype` still carries `Estimate` / `PI`, unchanged.
 
-## DONE — app is wired to these
+## Verified live today — same figures, both types
 
-| Endpoint | What the app sends / reads | Notes |
+Input: goods 1,200 · packing 500 · product GST 216 · packing GST 90 · `finaltotal` 2,006.
+
+| | Estimate (34158, Laranza/02270) | PI (34160, Laranza/02271) |
 |---|---|---|
-| `POST addtocartwithnetrate` | + `discountamount`, `ordertype` (`Estimate` / `PI`) | Contract observed: `netrate` is the stored rate (0 → use `itemrate`); **`discountpercent` is recorded only, no longer applied** — the app now sends the already-reduced rate for a % discount; `discountamount` IS applied by the server. Please keep it this way (or tell us if you change it). |
-| `POST cartdetailnew` | reads `ordertype, gstpercent, gstamount, discountpercent, discountamount` per row | The app no longer calls `itemdetail` per item. |
-| `POST placeorderlarnza` | + `ordertype, taxableamount, productgstamount, packagingcharge, packaginggstpercent, packaginggstamount, finaltotal` | Order amount is taken from `finaltotal` ✔. |
+| Layout | ESTIMATE | Sales Order |
+| PACKING CHARGE | 500 ✔ | 500 ✔ |
+| Taxable Amount | 1,700 | 1,700 |
+| Packing GST row | **missing** | `GST 18 % 90` ✔ |
+| Product GST row | `IGST 18 % 216` | `IGST 18 % 216` ✔ |
+| Grand Total | 2,006 ✔ | 2,006 ✔ |
 
-Packaging Charges are now entered on BOTH types. Estimate: packaging added to the total, NO packaging
-GST. PI: packaging + 18 % GST. `packaginggstamount` is posted as 0 on an Estimate.
+**Thank you — packaging now prints** (`shippingamount` → PACKING CHARGE). That was the long-
+standing gap and it is closed.
 
-No changes are needed to the order list or order detail APIs — the breakdown only has to appear
-on the printed bill.
+## One thing left
 
----
+**The Estimate template is missing the packing-GST row.** On 34158 the page reads
+Taxable 1,700 → IGST 216 → Grand 2,006, but 1,700 + 216 = 1,916. The ₹90 packing GST is inside
+the total and nowhere on the page, so the bill does not add up for the customer.
 
-## STILL NEEDED — the printed bill
+The PI template already prints both rows (`GST 18 % 90` and `IGST 18 % 216`) and adds up
+correctly. Please add the same packing-GST row to the Estimate layout — the app sends the value
+as `packinggstamt` (with `packinggstpercent=18`) on both types.
 
-### 1. Two formats — `orderpdf/getorderpdf`
-Both order types still return the same file (`…Printoutformate.aspx?…&Type=msaleorder`).
-Return the **Estimate** print URL when the order's saved `ordertype = Estimate` and the **PI**
-print URL when `PI`. The app downloads whatever URL is returned, so no app change is needed.
-
-### 2. PI bill — `Salesorder/Printoutformate.aspx`
-- **Packaging rows are missing** (needed on BOTH formats — on the Estimate bill show only
-  `Packaging Charges`, no GST row; e.g. order 33853: goods 800 + packaging 500 = 1,300). Order 33852: taxable 937.50 + IGST 168.75 = 1,106.25, but Grand
-  Total prints 1,696.00 with only "Rounded Off −0.25" between — the ₹500 packaging and ₹90
-  packaging GST are in the total but not shown. Add two rows: `Packaging Charges` and
-  `Packaging GST @ 18 %`.
-- **Net Rate column prints 0** for a line discounted by % (orders 33849 / 33852: MRP 625, Net
-  Rate `0`, Dis 25 %, Amount 937.50). The app sends `netrate = 468.75` for that line. For an
-  amount-discounted line the column is correct (3065 → 2865).
-
-### 3. Small fixes
-- `cartdetailnew` returns **one all-zero row** (`id 0`) for an empty cart instead of `[]`. The
-  app filters it, but an empty array would be cleaner.
-- `placeorderlarnza` answers **"Order Placed Successfully"** to an empty body (nothing is created).
-  It should reject a request without `userid / compid / partyid`.
+Test orders to delete: 34158, 34160 (AAKANSHA KITCHEN, 6 Oct).
