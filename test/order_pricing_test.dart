@@ -207,7 +207,7 @@ test('order level discount', () {
   }
 
   // 1. The order placed from the app on 2026-09-30: one line, MRP 1000
-  //    priced down to a Taxable Amt of 900, plus 100 packaging.
+  //    priced down to a Taxable Rate of 900, plus 100 packaging.
   //    It posted discountamount 900; it should post 100.
   const live = OrderTotals(mrpTotal: 1000, netTotal: 900, chargedTotal: 900);
   check('estimate gross = MRP', gross(live, isPi: false), 1000);
@@ -238,6 +238,9 @@ test('order level discount', () {
 });
 
   test('cash discount', _cashDiscountChecks);
+  test('cash discount is PI only', _cashDiscountIsPiOnlyChecks);
+  test('delete window', _deleteWindowChecks);
+  test('net rate vs discount lock', _rateDiscountLockChecks);
 }
 
 /// Cash discount: a percentage off the goods taken BEFORE tax, so it reduces
@@ -283,4 +286,138 @@ void _cashDiscountChecks() {
   // Out-of-range input is clamped, never inverted.
   check('cd 150 clamps to 100', billAt(150).taxableAmount, 0);
   check('cd -5 clamps to 0', billAt(-5).taxableAmount, 1200);
+}
+
+/// CD % is a PI-only concession: an Estimate must never carry one, whatever
+/// is sitting in the controller's field.
+void _cashDiscountIsPiOnlyChecks() {
+  print('   Estimate: showsCashDiscount=${OrderType.estimate.showsCashDiscount}');
+  print('   PI:       showsCashDiscount=${OrderType.pi.showsCashDiscount}');
+
+  const goods = OrderTotals(
+      mrpTotal: 1250, netTotal: 1250, chargedTotal: 1200, gstTotal: 216);
+
+  /// Mirrors YourOrderController.effectiveCashDiscountPercent.
+  double effective(OrderType type, double typed) =>
+      type.showsCashDiscount ? typed : 0;
+
+  OrderBill billFor(OrderType type, double typed) => OrderBill(
+        totals: goods,
+        packaging: const PackagingCharge(500),
+        chargesGst: true,
+        cashDiscountPercent: effective(type, typed),
+      );
+
+  // A stale 10 in the field must not reach an Estimate's bill.
+  final est = billFor(OrderType.estimate, 10);
+  check('estimate ignores cd: amount', est.cashDiscountAmount, 0);
+  check('estimate ignores cd: taxable', est.taxableAmount, 1200);
+  check('estimate ignores cd: gst', est.productGst, 216);
+  check('estimate ignores cd: final', est.finalTotal, 2006);
+
+  // The same 10 does apply on a PI.
+  final pi = billFor(OrderType.pi, 10);
+  check('pi applies cd: amount', pi.cashDiscountAmount, 120);
+  check('pi applies cd: taxable', pi.taxableAmount, 1080);
+  check('pi applies cd: final', pi.finalTotal, 1864.40);
+}
+
+/// The Delete button only shows while the ERP would still accept it: the day
+/// the order was raised. Mirrors OrderDetailController.canDelete.
+void _deleteWindowChecks() {
+  DateTime? parse(String raw) {
+    final parts = raw.split(RegExp(r'[-/]'));
+    if (parts.length != 3) return null;
+    final d = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final y = int.tryParse(parts[2]);
+    if (d == null || m == null || y == null) return null;
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+    return DateTime(y, m, d);
+  }
+
+  bool canDelete(String? raw) {
+    final t = raw?.trim();
+    if (t == null || t.isEmpty) return true;
+    final on = parse(t);
+    if (on == null) return true;
+    final now = DateTime.now();
+    return on.year == now.year && on.month == now.month && on.day == now.day;
+  }
+
+  String fmt(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-${d.year}';
+
+  final now = DateTime.now();
+  final today = fmt(now);
+  final yesterday = fmt(now.subtract(const Duration(days: 1)));
+  final lastMonth = fmt(DateTime(now.year, now.month, now.day - 40));
+
+  void flag(String name, bool actual, bool expected) =>
+      print('${actual == expected ? "PASS" : "FAIL"}  $name: '
+          'got $actual, expected $expected');
+
+  flag('today -> deletable', canDelete(today), true);
+  flag('yesterday -> hidden', canDelete(yesterday), false);
+  flag('40 days ago -> hidden', canDelete(lastMonth), false);
+
+  // Same day/month in another year must not count as today.
+  flag('same day last year -> hidden',
+      canDelete('${now.day.toString().padLeft(2, '0')}-'
+          '${now.month.toString().padLeft(2, '0')}-${now.year - 1}'),
+      false);
+
+  // Unreadable or missing dates leave the button up; the server still decides.
+  flag('null -> shown', canDelete(null), true);
+  flag('empty -> shown', canDelete('   '), true);
+  flag('garbage -> shown', canDelete('not a date'), true);
+  flag('bad month -> shown', canDelete('06-99-2026'), true);
+}
+
+/// Net Rate and Discount are mutually exclusive on a PI line: filling one
+/// locks the other, clearing it unlocks again. Mirrors
+/// QuickOrderController.netRateLocked / discountLocked.
+void _rateDiscountLockChecks() {
+  // The controller's state for one line.
+  double? netRate;      // null = box empty
+  double discPercent = 0;
+  double discAmount = 0;
+
+  bool hasNetRate() => netRate != null;
+  bool hasDiscount() => discPercent > 0 || discAmount > 0;
+  bool netRateLocked() => hasDiscount();
+  bool discountLocked() => hasNetRate();
+
+  void flag(String name, bool actual, bool expected) =>
+      print('${actual == expected ? "PASS" : "FAIL"}  $name: '
+          'got $actual, expected $expected');
+
+  // Untouched line: both open, user may start with either.
+  flag('fresh: rate open', netRateLocked(), false);
+  flag('fresh: discount open', discountLocked(), false);
+
+  // Type a Net Rate -> discount locks.
+  netRate = 600;
+  flag('net rate typed -> discount locked', discountLocked(), true);
+  flag('net rate typed -> rate still open', netRateLocked(), false);
+
+  // Clear it -> discount free again.
+  netRate = null;
+  flag('net rate cleared -> discount open', discountLocked(), false);
+
+  // Type a discount % -> net rate locks.
+  discPercent = 10;
+  flag('discount % typed -> rate locked', netRateLocked(), true);
+  discPercent = 0;
+  flag('discount % cleared -> rate open', netRateLocked(), false);
+
+  // Same for a flat amount.
+  discAmount = 50;
+  flag('discount amt typed -> rate locked', netRateLocked(), true);
+
+  // A zero discount is not a discount — it must not lock anything.
+  discAmount = 0;
+  discPercent = 0;
+  flag('zero discount -> rate open', netRateLocked(), false);
 }

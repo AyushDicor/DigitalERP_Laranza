@@ -194,7 +194,7 @@ class YourOrderController extends AppBaseController {
         totals: totals,
         packaging: PackagingCharge(packagingCharge),
         chargesGst: gstApplicable,
-        cashDiscountPercent: cashDiscountPercent,
+        cashDiscountPercent: effectiveCashDiscountPercent,
       );
 
   /// What the goods come to BEFORE any discount — the figure
@@ -291,7 +291,16 @@ class YourOrderController extends AppBaseController {
   /// Cash discount for the whole order, typed above Packaging. Comes off the
   /// goods BEFORE tax — see [OrderBill.cashDiscountAmount] — and is posted as
   /// `cdpercent`/`cdamount`. Optional: left empty it is simply 0.
+  ///
+  /// PI only. Read [effectiveCashDiscountPercent], never this field, when
+  /// computing or posting anything.
   double cashDiscountPercent = 0;
+
+  /// The cash discount that actually applies: always zero on an Estimate,
+  /// which has no CD box. Guarding here rather than only hiding the field
+  /// means a value can never leak in through a stale controller.
+  double get effectiveCashDiscountPercent =>
+      orderType.showsCashDiscount ? cashDiscountPercent : 0;
 
   final cdController = TextEditingController();
 
@@ -396,7 +405,7 @@ class YourOrderController extends AppBaseController {
       /// the discount now comes from how the lines were priced.
       ///
       /// The base is the same one each line measures its own discount
-      /// against: the MRP on an Estimate (MRP → Taxable Amt), the typed Net
+      /// against: the MRP on an Estimate (MRP → Taxable Rate), the typed Net
       /// Rate on a PI. So this total is exactly the sum of the per-line
       /// `discountamount`s already sent to the cart.
       final b = bill;

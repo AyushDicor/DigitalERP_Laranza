@@ -46,6 +46,12 @@ class ApiMethods {
   String getOrderPdf          = 'orderpdf/getorderpdf';
 
   String updateOrderStatus    = 'changeorderstatus/updateorderstatus';
+
+  /// Deletes a placed order. Needs orderid + compid + userid + branchid —
+  /// drop any one of the four and it answers "Order not found" (probed
+  /// 2026-10-07). The server refuses anything but the current day with
+  /// "Only today order can be deleted".
+  String deleteOrder          = 'salesorderdelete';
   String partyBalanceDetail   = 'Partybalancedetail/partybalance';
   String locationRouteSave    = 'locationroute/locationsave';
   String executiveDayLocation = 'executivedaylocation/daylocation';

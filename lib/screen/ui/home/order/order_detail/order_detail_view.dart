@@ -456,6 +456,18 @@ class OrderDetailView extends StatelessWidget {
                         ),
                       ],
                     ),
+                    /// Deleting cannot be undone, so it sits apart from the
+                    /// row above, is the only destructive-styled control on
+                    /// the screen, and asks before it acts.
+                    ///
+                    /// Shown only while the ERP would still accept it — it
+                    /// refuses anything but the day the order was raised, and
+                    /// offering an action that is certain to be denied is
+                    /// worse than not offering it.
+                    if (controller.canDelete) ...[
+                      const SizedBox(height: 12),
+                      Obx(() => _deleteButton(context, controller)),
+                    ],
                   ],
                 ),
               ),
@@ -721,6 +733,88 @@ class OrderDetailView extends StatelessWidget {
   static final NumberFormat _inr = NumberFormat('#,##,##0.00', 'en_IN');
 
   static String _money(num? value) => '₹${_inr.format(value ?? 0)}';
+
+  /// Full-width outlined destructive action. Outlined rather than filled so
+  /// it never competes with View PDF for the eye.
+  Widget _deleteButton(BuildContext context, OrderDetailController controller) {
+    final busy = controller.isDeleting.value;
+    return GestureDetector(
+      onTap: busy ? null : () => _confirmDelete(context, controller),
+      child: Container(
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: newRedColor.withValues(alpha: 0.5)),
+        ),
+        child: busy
+            ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: newRedColor),
+              )
+            : const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.delete_outline_rounded,
+                    color: newRedColor, size: 18),
+                SizedBox(width: 8),
+                Text('Delete Order',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: newRedColor)),
+              ]),
+      ),
+    );
+  }
+
+  /// Names the order being deleted and says plainly that it cannot be undone.
+  /// The ERP only permits it on the day the order was raised; that rule is
+  /// enforced server-side and its refusal is surfaced verbatim.
+  void _confirmDelete(BuildContext context, OrderDetailController controller) {
+    final orderNo = controller.orderDetailData?.orderno ?? 'this order';
+    Get.dialog(
+      AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Order?',
+            style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: newTextPrimary)),
+        content: Text(
+          '$orderNo will be removed permanently. This cannot be undone.',
+          style: const TextStyle(
+              fontSize: 13.5, height: 1.4, color: newTextSecondary),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Keep Order',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: newTextSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Get.back();
+              controller.deleteOrder();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: newRedColor,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Delete',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _actionButton({
     required IconData icon,

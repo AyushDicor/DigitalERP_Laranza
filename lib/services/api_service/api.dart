@@ -1813,6 +1813,34 @@ class Api {
     }
   }
 
+  /// Deletes a placed order — see [_apiMethods.deleteOrder] for the fields it
+  /// needs. Returns the ERP's own refusal message ("Only today order can be
+  /// deleted") as [CommonResponse.message], which the caller shows as-is.
+  Future<CommonResponse> deleteOrderApi(Map<String, String> body) async {
+    List<ConnectivityResult> connectivityResults =
+        await connectivity.checkConnectivity();
+
+    if (connectivityResults.contains(ConnectivityResult.wifi) ||
+        connectivityResults.contains(ConnectivityResult.mobile)) {
+      String res = await _apiClient.postMethod(
+          method: _apiMethods.deleteOrder, body: body);
+      if (res.isNotEmpty) {
+        try {
+          return commonResponseFromJson(res);
+        } catch (e) {
+          if (kDebugMode) {
+            print(e);
+          }
+          return CommonResponse(status: 500, message: e.toString());
+        }
+      } else {
+        return CommonResponse(status: 500, message: 'Something went wrong');
+      }
+    } else {
+      return CommonResponse(status: 500, message: 'No internet');
+    }
+  }
+
   Future<CommonResponse> updateOrderStatusApi(Map<String, String> body) async {
     List<ConnectivityResult> connectivityResults =
         await connectivity.checkConnectivity();

@@ -167,6 +167,20 @@ class ReportType {
 class AppConst {
   static DateTime calenderFirstDate = DateTime(2000, 1, 1);
   static DateTime calenderLastDate  = DateTime(2050, 12, 31);
+
+  /// Check the appcast for a newer build on the home screen.
+  ///
+  /// OFF here: the feed below is shared across the DigitalERP white-labels and
+  /// advertises version 1.0.10 of **com.digitalerp.app**, while this build is
+  /// `com.laranza.app` at a lower version. With it on, the home screen showed
+  /// an "Update App?" dialog on every launch that could not be dismissed —
+  /// there is no Ignore or Later button — and whose only action opened another
+  /// company's Play listing, which cannot install over this app.
+  ///
+  /// Turn it back on only once Laranza has its own appcast XML *and* a store
+  /// listing whose package id matches.
+  static const bool checkForUpdates = false;
+
   static String appCastUrl =
       'https://raw.githubusercontent.com/Reyparmar/appxml/main/digitalerpappcast.xml';
 }

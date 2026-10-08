@@ -6,7 +6,8 @@ Base URL `http://supportapi.digitalerp.biz/api/` · compid 59 · test user 51070
 
 - **GST selector removed.** Every order posts `ordergsttype=Gstcalculation`, Estimate and PI
   alike. Product GST, Packaging Charges and Packaging GST @ 18 % apply to both.
-- **CD % added** on the Place Order screen, above Packaging. It comes off the goods **before**
+- **CD % added** on the Place Order screen, above Packaging — **PI only**. An Estimate has no CD
+  box and always posts `cdpercent`/`cdamount` as 0. On a PI it comes off the goods **before**
   tax, so the GST is calculated on the reduced amount; packaging and its 18 % are added after
   and are not affected. Left empty it is 0 and nothing changes.
 - `cdpercent` / `cdamount` are now posted with real values (they used to be hard-coded 0).
@@ -58,3 +59,28 @@ The PI template (34160) prints both `GST 18 % 90` and `IGST 18 % 216` and adds u
 Please add the same packing-GST row to the Estimate layout.
 
 Test orders to delete: 34158, 34160, 34169 (AAKANSHA KITCHEN, 6 Oct).
+
+---
+
+## Delete order — `api/salesorderdelete` (added 7 Oct)
+
+Wired into the Order Detail screen with a confirmation dialog. Verified end to end.
+
+**Contract as probed** (please confirm it is intended):
+
+| | |
+|---|---|
+| Method | POST, form or JSON |
+| Required | `orderid`, `compid`, `userid`, `branchid` — **all four**. Omit any one and it replies "Order not found" even when the order exists. |
+| Not needed | `yearid` |
+| Success | `{"success":true,"data":{"orderid":34194},"message":"Order Deleted Successfully"}` |
+| Rule | Older orders are refused with "Only today order can be deleted" — shown to the user as-is |
+
+**Two things to look at:**
+
+1. **No ownership check.** The call succeeds on any order whose id is posted, with no validation
+   that it belongs to the caller's company/branch/user. Any logged-in user could delete another
+   tenant's order by id. Please add a server-side ownership check.
+2. **Deleted ids and order numbers are reused.** After deleting 34194 / Laranza/02282, the next
+   order came back as 34194 / Laranza/02282 again. If order numbers are meant to be unique in
+   the books, the sequence should not roll back.

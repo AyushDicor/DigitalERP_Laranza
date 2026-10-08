@@ -35,10 +35,17 @@ enum OrderType {
   /// ever being shown.
   bool get showsDiscountFields => this == OrderType.pi;
 
+  /// The order-level cash discount (CD %) is a PI-only concession. An Estimate
+  /// is already quoted at the price the customer is being offered, so it has
+  /// no CD box and always posts `cdpercent`/`cdamount` as 0.
+  bool get showsCashDiscount => this == OrderType.pi;
+
   /// What the editable per-unit rate is called on the line. On an Estimate it
-  /// is the figure tax would be worked out on, so it is labelled as such.
+  /// is the figure tax would be worked out on, and "Taxable Rate" is exactly
+  /// what the ERP's Estimate print-out calls that column — so the box and the
+  /// bill the customer receives use one name.
   String get rateFieldLabel =>
-      this == OrderType.pi ? 'Net Rate' : 'Taxable Amt';
+      this == OrderType.pi ? 'Net Rate' : 'Taxable Rate';
 
   static OrderType fromName(String? name) =>
       name == OrderType.pi.name ? OrderType.pi : OrderType.estimate;

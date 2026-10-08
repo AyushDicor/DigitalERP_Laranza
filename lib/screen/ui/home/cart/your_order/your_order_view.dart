@@ -103,13 +103,17 @@ class YourOrderView extends StatelessWidget {
                     /// order, Estimate and PI alike, so there is nothing to
                     /// choose. See [YourOrderController.gstApplicable].
                     ///
-                    /// Cash discount sits ABOVE packaging because it comes off
-                    /// the goods first and the tax is worked out on what is
-                    /// left; packaging is added after, with its own tax.
-                    const SizedBox(height: 18),
-                    _sectionLabel('Cash Discount'),
-                    const SizedBox(height: 8),
-                    _cashDiscountCard(ctrl),
+                    /// Cash discount is PI only — an Estimate is already
+                    /// quoted at the offered price. It sits ABOVE packaging
+                    /// because it comes off the goods first and the tax is
+                    /// worked out on what is left; packaging is added after,
+                    /// with its own tax.
+                    if (ctrl.orderType.showsCashDiscount) ...[
+                      const SizedBox(height: 18),
+                      _sectionLabel('Cash Discount'),
+                      const SizedBox(height: 8),
+                      _cashDiscountCard(ctrl),
+                    ],
 
                     /// Packaging is an order-level charge on both document
                     /// types, so it sits between the goods and the bill rather

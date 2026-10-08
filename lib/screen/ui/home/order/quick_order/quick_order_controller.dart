@@ -4,7 +4,6 @@ import 'package:digitalerp/app_routes/app_routes.dart';
 import 'package:digitalerp/response/brand_list_data_response.dart';
 import 'package:digitalerp/response/cart_count_response.dart';
 import 'package:digitalerp/response/party_dropdown_list_response.dart';
-import 'package:digitalerp/response/select_category_list_response.dart';
 import 'package:digitalerp/response/subcategory_brand_response.dart';
 import 'package:digitalerp/screen/base/base_controller.dart';
 import 'package:digitalerp/screen/ui/home/home_controller.dart';
@@ -94,9 +93,10 @@ class QuickOrderController extends AppBaseController {
   BrandItem? selectedBrand;
   bool isBrandLoading = false;
 
-  // Category chips (0 == "All")
-  List<CategoryItem> categoryList = [];
-  int selectedCategoryId = 0;
+  /// The category filter chips were removed — the brand's whole catalogue is
+  /// listed and the search box filters it. 0 means "every category", which is
+  /// what the item-list API takes, so the product request is unchanged.
+  static const int selectedCategoryId = 0;
 
   // Products
   /// Everything returned for the current brand + category, before search.
@@ -199,6 +199,23 @@ class QuickOrderController extends AppBaseController {
       _netRates[item.itemid] ?? mrpOf(item);
 
   bool hasNetRateOverride(int? itemId) => _netRates.containsKey(itemId);
+
+  /// A line is priced EITHER by typing a Net Rate OR by taking a discount off
+  /// the MRP — never both, because the two would fight over the same rate and
+  /// the bill could not say which the customer was given.
+  ///
+  /// Whichever box is filled first locks the other; clearing it unlocks again,
+  /// so nothing is a dead end. Both are false on an untouched line, leaving
+  /// the user free to start with either.
+  bool netRateLocked(int? itemId) => hasDiscountEntry(itemId);
+
+  bool discountLocked(int? itemId) => hasNetRateOverride(itemId);
+
+  /// True when this line carries a discount, whichever way it was expressed.
+  /// Reads the stored values rather than the text so "0" and a cleared box
+  /// both count as no discount and release the lock.
+  bool hasDiscountEntry(int? itemId) =>
+      discountOf(itemId) > 0 || discountAmountOf(itemId) > 0;
 
   double discountOf(int? itemId) => _discounts[itemId] ?? 0;
 
@@ -545,7 +562,6 @@ class QuickOrderController extends AppBaseController {
         /// Most companies carry a single brand — skip the pointless tap.
         if (brandList.length == 1) {
           selectedBrand = brandList.first;
-          getCategoryList();
           getProductList();
         }
       } else {
@@ -562,45 +578,13 @@ class QuickOrderController extends AppBaseController {
   void onPickBrand(BrandItem brand) {
     if (brand.brandid == selectedBrand?.brandid) return;
     selectedBrand = brand;
-    selectedCategoryId = 0;
-    categoryList = [];
     _allProducts = [];
     productList = [];
     searchController.clear();
     update();
-    getCategoryList();
     getProductList();
   }
 
-  Future<void> getCategoryList() async {
-    if (selectedBrand?.brandid == null) return;
-    try {
-      Map<String, String> body = {};
-      body[RequestKeys.compId] =
-          homeController.currentUserData?.compId.toString() ?? '';
-      body[RequestKeys.brandId] = selectedBrand!.brandid.toString();
-      body[RequestKeys.branchId] =
-          homeController.currentUserData?.branchId.toString() ?? '0';
-      var res = await api.getCategoryData(body);
-      if (res.status == 200) {
-        categoryList = (res.data as List?)?.cast<CategoryItem>() ?? [];
-        update();
-      }
-    } catch (_) {
-      /// Chips are a convenience filter — if they fail the full list still
-      /// renders, so this stays silent rather than throwing a snackbar at the
-      /// user mid-entry.
-    }
-  }
-
-  void onPickCategory(int categoryId) {
-    if (categoryId == selectedCategoryId) return;
-    selectedCategoryId = categoryId;
-    update();
-    getProductList();
-  }
-
-  // Products
 
   Future<void> getProductList() async {
     if (selectedBrand?.brandid == null) return;
@@ -650,10 +634,18 @@ class QuickOrderController extends AppBaseController {
       productList = List<ProductDataList>.from(_allProducts);
       return;
     }
+    /// Name, code and description. There is no serial-number field on
+    /// `itemlistwithbranch` — the response carries only itemid, itemname,
+    /// itemcode, itemdescription, unit and rate — so a serial typed here can
+    /// only match if it was recorded in the description. Add it to this list
+    /// the day the backend returns one.
     productList = _allProducts.where((e) {
       final name = (e.itemname ?? '').toLowerCase();
       final code = (e.itemcode ?? '').toLowerCase();
-      return name.contains(query) || code.contains(query);
+      final desc = (e.itemdescription ?? '').toLowerCase();
+      return name.contains(query) ||
+          code.contains(query) ||
+          desc.contains(query);
     }).toList();
   }
 
@@ -777,6 +769,11 @@ class QuickOrderController extends AppBaseController {
     final id = item.itemid;
     if (id == null) return;
 
+    /// The box is disabled while a discount is live, so this should not fire;
+    /// refused here too, because a value that slipped past the UI would be
+    /// applied on top of the discount instead of instead of it.
+    if (netRateLocked(id)) return;
+
     final text = raw.trim();
     final parsed = double.tryParse(text);
     if (text.isEmpty || parsed == null) {
@@ -818,7 +815,7 @@ class QuickOrderController extends AppBaseController {
   /// discount rather than throwing out of `onChanged`.
   void onDiscountTyped(ProductDataList item, String raw) {
     final id = item.itemid;
-    if (id == null) return;
+    if (id == null || discountLocked(id)) return;
     final value = (double.tryParse(raw.trim()) ?? 0).clamp(0, 100).toDouble();
     _discounts[id] = value;
     picked[id]?.discountPercent = value;
@@ -829,7 +826,7 @@ class QuickOrderController extends AppBaseController {
   /// Net Rate is capped by [discountPerUnitOf] so the line cannot go negative.
   void onDiscountAmountTyped(ProductDataList item, String raw) {
     final id = item.itemid;
-    if (id == null) return;
+    if (id == null || discountLocked(id)) return;
     final parsed = double.tryParse(raw.trim()) ?? 0;
     final value = parsed < 0 ? 0.0 : parsed;
     _discountAmounts[id] = value;

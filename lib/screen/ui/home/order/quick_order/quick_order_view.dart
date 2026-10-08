@@ -44,7 +44,9 @@ class QuickOrderView extends StatelessWidget {
               ),
               _orderTypeSelector(ctrl),
               _selectors(ctrl),
-              if (ctrl.categoryList.isNotEmpty) _categoryChips(ctrl),
+              /// No category chips: the brand's whole catalogue is listed and
+              /// the search box below filters it. The chips were a second,
+              /// competing filter that pushed the products further down.
               _searchBar(ctrl),
               const SizedBox(height: 8),
               Expanded(child: _body(ctrl)),
@@ -264,56 +266,6 @@ class QuickOrderView extends StatelessWidget {
     );
   }
 
-  // Category filter chips
-
-  Widget _categoryChips(QuickOrderController ctrl) {
-    return SizedBox(
-      height: 36,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: [
-          _chip('All', ctrl.selectedCategoryId == 0,
-              () => ctrl.onPickCategory(0)),
-          ...ctrl.categoryList.map(
-            (c) => _chip(
-              c.categoryname ?? '',
-              ctrl.selectedCategoryId == c.categoryid,
-              () => ctrl.onPickCategory(c.categoryid ?? 0),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _chip(String label, bool selected, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: selected ? newBlueColor : newSurfaceColor,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-                color: selected ? newBlueColor : newBorderColor),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? Colors.white : newTextSecondary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   // Search
 
   Widget _searchBar(QuickOrderController ctrl) {
@@ -325,7 +277,7 @@ class QuickOrderView extends StatelessWidget {
         style: const TextStyle(fontSize: 14, color: newTextPrimary),
         decoration: InputDecoration(
           isDense: true,
-          hintText: 'Search item name or code',
+          hintText: 'Search item name or code or serial number',
           hintStyle: const TextStyle(color: newTextHint, fontSize: 14),
           prefixIcon:
               const Icon(Icons.search, color: newTextSecondary, size: 20),
@@ -514,18 +466,25 @@ class QuickOrderView extends StatelessWidget {
 
   /// The per-line pricing controls, which differ by document type.
   ///
-  /// **Estimate** — MRP and Taxable Amt, nothing else. The gap between the two
+  /// **Estimate** — MRP and Taxable Rate, nothing else. The gap between the two
   /// is the discount; it is derived when the line is added to the cart and
   /// posted, but deliberately never shown here.
   ///
   /// **PI** — the item-master rate is authoritative, so the MRP box is hidden
-  /// rather than disabled (nothing to tap) and the line is priced with a Net
-  /// Rate plus one discount expressed either as a percentage or in rupees.
+  /// rather than disabled (nothing to tap) and the line is priced EITHER with
+  /// a Net Rate OR with a discount off the MRP. Filling one locks the other —
+  /// see [QuickOrderController.netRateLocked] — because both at once would
+  /// fight over the same rate.
   Widget _pricingRow(QuickOrderController ctrl, ProductDataList item) {
     final editableMrp = ctrl.orderType.allowsMrpEdit;
     final showsDiscount = ctrl.orderType.showsDiscountFields;
     final discountType = ctrl.discountTypeOf(item.itemid);
     final byAmount = discountType == OrderDiscountType.amount;
+
+    /// Only meaningful where both controls exist; on an Estimate there are no
+    /// discount boxes, so the rate box is never locked.
+    final rateLocked = showsDiscount && ctrl.netRateLocked(item.itemid);
+    final discLocked = ctrl.discountLocked(item.itemid);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -557,6 +516,7 @@ class QuickOrderView extends StatelessWidget {
                 hint: '0',
                 controller: ctrl.rateCtrl(item),
                 onChanged: (v) => ctrl.onNetRateTyped(item, v),
+                enabled: !rateLocked,
               ),
             ),
           ],
@@ -567,7 +527,8 @@ class QuickOrderView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: _discountTypePicker(ctrl, item, discountType),
+                child: _discountTypePicker(ctrl, item, discountType,
+                    enabled: !discLocked),
               ),
               const SizedBox(width: 10),
 
@@ -582,6 +543,7 @@ class QuickOrderView extends StatelessWidget {
                         hint: '0',
                         controller: ctrl.discAmtCtrl(item),
                         onChanged: (v) => ctrl.onDiscountAmountTyped(item, v),
+                        enabled: !discLocked,
                       )
                     : _pricingField(
                         key: ValueKey('disc_pct_${item.itemid}'),
@@ -590,10 +552,33 @@ class QuickOrderView extends StatelessWidget {
                         hint: '0',
                         controller: ctrl.discCtrl(item),
                         onChanged: (v) => ctrl.onDiscountTyped(item, v),
+                        enabled: !discLocked,
                       ),
               ),
             ],
           ),
+
+          /// Says why a box is greyed, so a locked field never reads as a
+          /// broken one. Only one of the two can be true.
+          if (rateLocked || discLocked) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.lock_outline_rounded,
+                    size: 12, color: newTextHint),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    rateLocked
+                        ? 'Clear the discount to type a Net Rate'
+                        : 'Clear the Net Rate to use a discount',
+                    style: const TextStyle(
+                        fontSize: 10.5, color: newTextSecondary),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ],
     );
@@ -601,17 +586,17 @@ class QuickOrderView extends StatelessWidget {
 
   /// Sits immediately left of the discount box so the two read as one control.
   Widget _discountTypePicker(QuickOrderController ctrl, ProductDataList item,
-      OrderDiscountType selected) {
+      OrderDiscountType selected, {bool enabled = true}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           'Discount Type',
           style: TextStyle(
             fontSize: 10.5,
             fontWeight: FontWeight.w600,
-            color: newTextSecondary,
+            color: enabled ? newTextSecondary : newTextHint,
           ),
         ),
         const SizedBox(height: 4),
@@ -619,6 +604,7 @@ class QuickOrderView extends StatelessWidget {
           initialValue: selected,
           tooltip: 'Discount type',
           position: PopupMenuPosition.under,
+          enabled: enabled,
           onSelected: (type) => ctrl.onPickDiscountType(item, type),
           itemBuilder: (_) => [
             for (final type in OrderDiscountType.values)
@@ -636,7 +622,7 @@ class QuickOrderView extends StatelessWidget {
             height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: enabled ? Colors.white : newSurfaceColor,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: newBorderColor),
             ),
@@ -647,10 +633,10 @@ class QuickOrderView extends StatelessWidget {
                     selected.shortLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: newTextPrimary,
+                      color: enabled ? newTextPrimary : newTextHint,
                     ),
                   ),
                 ),
@@ -664,6 +650,8 @@ class QuickOrderView extends StatelessWidget {
     );
   }
 
+  /// [enabled] false greys the box and stops input — used when the other half
+  /// of the Net Rate / Discount pair has been filled in.
   Widget _pricingField({
     required String label,
     required TextEditingController controller,
@@ -672,6 +660,7 @@ class QuickOrderView extends StatelessWidget {
     String? prefix,
     String? hint,
     Key? key,
+    bool enabled = true,
   }) {
     return Column(
       key: key,
@@ -680,10 +669,10 @@ class QuickOrderView extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10.5,
             fontWeight: FontWeight.w600,
-            color: newTextSecondary,
+            color: enabled ? newTextSecondary : newTextHint,
           ),
         ),
         const SizedBox(height: 4),
@@ -692,14 +681,15 @@ class QuickOrderView extends StatelessWidget {
           child: TextField(
             controller: controller,
             onChanged: onChanged,
+            enabled: enabled,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
             ],
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: newTextPrimary,
+              color: enabled ? newTextPrimary : newTextHint,
             ),
             decoration: InputDecoration(
               isDense: true,
@@ -712,7 +702,10 @@ class QuickOrderView extends StatelessWidget {
               suffixStyle:
                   const TextStyle(color: newTextSecondary, fontSize: 12),
               filled: true,
-              fillColor: Colors.white,
+
+              /// Greyed while locked, so it reads as unavailable rather than
+              /// merely empty.
+              fillColor: enabled ? Colors.white : newSurfaceColor,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               border: OutlineInputBorder(
@@ -726,6 +719,10 @@ class QuickOrderView extends StatelessWidget {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: newBlueColor, width: 1.5),
+              ),
+              disabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: newBorderColor),
               ),
             ),
           ),

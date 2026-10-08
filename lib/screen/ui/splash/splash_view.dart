@@ -18,9 +18,6 @@ class SplashView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              //  Stacked layers logo 
-              // The Laranza wordmark is a wide 4:1 lockup, so give it a wide
-              // box — a 100x100 square shrank it to a sliver.
               Image.asset(
                 'assets/images/laranzalogo.png',
                 width: 240,
