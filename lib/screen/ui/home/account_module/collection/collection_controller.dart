@@ -77,7 +77,29 @@ class CollectionController extends AppBaseController {
 
   void setSelectedIndex(int value) {
     selectedIndex = value;
+    _autoSelectCollectionLedger();
     update();
+  }
+
+  /// Points the Collection Ledger at the account the money actually lands in:
+  /// CASH for a cash collection, BANK for a cheque or an online transfer.
+  ///
+  /// Matched on the ledger NAME rather than a hard-coded partyid, because the
+  /// ids differ per company (Laranza: CASH 203710, BANK 203711). If neither
+  /// name is recognised the current selection is left alone — a wrong ledger
+  /// posts the money to the wrong account, so doing nothing and letting the
+  /// user choose is the safer failure.
+  void _autoSelectCollectionLedger() {
+    if (cashAndBankLedgerList.isEmpty) return;
+
+    /// Cash is index 0; Cheque (1) and Online (2) both settle through a bank.
+    final wanted = selectedIndex == 0 ? 'cash' : 'bank';
+    for (final ledger in cashAndBankLedgerList) {
+      if ((ledger.partyname ?? '').toLowerCase().contains(wanted)) {
+        selectedCollectionLedgerValue = ledger;
+        return;
+      }
+    }
   }
 
   onTabAccountModule() {
@@ -105,11 +127,9 @@ class CollectionController extends AppBaseController {
       ShowMessage.showSnackBar('Please check', 'Please add cheque Date ');
     } else if (selectedCollectionLedgerValue == null) {
       ShowMessage.showSnackBar('Please check', 'Please select collection Ledger');
-    } else if (remarkController.text.trim().isEmpty) {
-      /// Remark is mandatory on a collection. Trimmed, so a stray space
-      /// cannot slip past, and the field is focused so the user lands on it.
-      ShowMessage.showSnackBar('Please check', 'Please add Remark');
-      remarkFocus.requestFocus();
+
+      /// Remark is optional — no check here. It is still sent, trimmed, when
+      /// the user does write one.
     } else if (selectedIndex == 1 && selectedImage.isEmpty) {
       ShowMessage.showSnackBar('Please check', 'Please Add cheque Image');
     } else {
@@ -194,6 +214,11 @@ class CollectionController extends AppBaseController {
       var res = await api.cashAndBankLedgerData(body);
       if (res.status == 200) {
         cashAndBankLedgerList = res.data ?? [];
+
+        /// The list arrives after the screen is built, so apply the rule now
+        /// that there is something to match — otherwise the default payment
+        /// mode (Cash) would open with an empty ledger box.
+        _autoSelectCollectionLedger();
         /*customerDataList.forEach((element) {
           if(element.partyid.toString() == Get.arguments){
             customerName = element.partyname ?? '';

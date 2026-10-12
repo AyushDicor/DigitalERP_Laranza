@@ -88,7 +88,7 @@ class CollectionView extends StatelessWidget {
                             const SizedBox(height: 8),
                             _ledgerDropdown(controller),
                             const SizedBox(height: 16),
-                            _sectionLabel(AppString.remark, required: true),
+                            _sectionLabel(AppString.remark),
                             const SizedBox(height: 8),
                             _boxField(
                               controller: controller.remarkController,

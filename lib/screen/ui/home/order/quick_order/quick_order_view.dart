@@ -319,6 +319,7 @@ class QuickOrderView extends StatelessWidget {
       return _placeholder(Icons.inventory_2_outlined, 'No products found');
     }
     return ListView.builder(
+      controller: ctrl.productScrollController,
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       itemCount: ctrl.productList.length,
       itemBuilder: (_, i) => _productRow(ctrl, ctrl.productList[i]),
@@ -395,7 +396,11 @@ class QuickOrderView extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Code: ${item.itemcode ?? '-'}   |   ${item.unit ?? ''}',
+                      /// The serial is appended only when the item has one —
+                      /// most do not yet, and an empty "S/N:" on every row
+                      /// would be noise.
+                      'Code: ${item.itemcode ?? '-'}   |   ${item.unit ?? ''}'
+                      '${(item.sno ?? '').trim().isEmpty ? '' : '   |   S/N: ${item.sno!.trim()}'}',
                       style: const TextStyle(
                           fontSize: 11, color: newTextSecondary),
                     ),

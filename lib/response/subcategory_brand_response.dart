@@ -119,6 +119,7 @@ class ProductDataList {
       /// tolerated that; `addtocartwithnetrate` rejects it with
       /// "Data Not Added".
       required this.unitid,
+      this.sno,
       this.isTextField});
 
   int? itemid;
@@ -132,6 +133,11 @@ class ProductDataList {
   double? rate;
   double? requiredpoint;
   double? quantity;
+
+  /// Serial number, returned only by the `itemwithbranchandsno` endpoint.
+  /// Null on the plain item-list endpoint, and empty on any item that has not
+  /// been given a serial yet — which is most of them today.
+  String? sno;
   bool? isTextField;
 
   factory ProductDataList.fromJson(Map<String, dynamic> json) => ProductDataList(
@@ -146,6 +152,7 @@ class ProductDataList {
       quantity: json["quantity"],
       isInCart: json["isInCart"] ?? false,
       unitid: json["unitid"],
+      sno: json["sno"]?.toString(),
       isTextField: json["isTextField"] ?? false);
 
   Map<String, dynamic> toJson() => {
@@ -159,6 +166,7 @@ class ProductDataList {
         "requiredpoint": requiredpoint,
         "quantity": quantity,
         "unitid": unitid,
+        "sno": sno,
       };
 
   @override

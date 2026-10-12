@@ -2241,14 +2241,21 @@ class Api {
     }
   }
 
-  Future<ProductData> getProductData(Map<String, String> body) async {
+  /// [withSerial] swaps in the endpoint that also returns each item's `sno`.
+  /// Same request, same rows — only the order screen needs it, so the other
+  /// callers stay on the original.
+  Future<ProductData> getProductData(Map<String, String> body,
+      {bool withSerial = false}) async {
     List<ConnectivityResult> connectivityResults =
         await connectivity.checkConnectivity();
 
     if (connectivityResults.contains(ConnectivityResult.wifi) ||
         connectivityResults.contains(ConnectivityResult.mobile)) {
       String res = await _apiClient.postMethod(
-          method: _apiMethods.productListItem, body: body);
+          method: withSerial
+              ? _apiMethods.productListItemWithSno
+              : _apiMethods.productListItem,
+          body: body);
       if (res.isNotEmpty) {
         try {
           return productDataFromJson(res);

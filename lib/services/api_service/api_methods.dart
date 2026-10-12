@@ -199,6 +199,16 @@ class ApiMethods {
   /// -Stack Tacking Screen
   String stockCategory   = 'category/categorylist';
   String productListItem = 'itemwithbranch/itemlistwithbranch';
+
+  /// Same parameters and the same rows as [productListItem], plus a per-item
+  /// `sno` (serial number) used by the order screen's search box.
+  ///
+  /// Used ONLY there: it is a bare controller with no action segment, and its
+  /// server-side `itemname` filter does not work (returns 0 rows where the
+  /// original returns 1). Every caller sends `itemname` empty and filters on
+  /// the device, so that costs nothing — but it is a reason not to point the
+  /// other five screens at it.
+  String productListItemWithSno = 'itemwithbranchandsno';
   String stockTaking     = 'Stocktaking/stocktakingin';
 
   /// -New Visit Planing Screen

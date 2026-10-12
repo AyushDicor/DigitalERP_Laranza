@@ -106,6 +106,21 @@ class QuickOrderController extends AppBaseController {
   List<ProductDataList> productList = [];
   final searchController = TextEditingController();
 
+  /// Drives the product list back to the top whenever the visible set changes.
+  ///
+  /// Without this the list keeps the offset it had under the previous, longer
+  /// set: type a search that matches items far up the catalogue and the screen
+  /// stays scrolled past them, looking exactly like "no results" until you
+  /// happen to swipe. Caught on a real search for "anthra" — 26 matches, blank
+  /// screen.
+  final productScrollController = ScrollController();
+
+  void _scrollProductsToTop() {
+    if (productScrollController.hasClients) {
+      productScrollController.jumpTo(0);
+    }
+  }
+
   // Basket staged locally until "Add All to Cart"
   final Map<int, PickedItem> picked = {};
 
@@ -365,6 +380,7 @@ class QuickOrderController extends AppBaseController {
   @override
   void onClose() {
     searchController.dispose();
+    productScrollController.dispose();
     for (final c in [
       ..._qtyCtrls.values,
       ..._mrpCtrls.values,
@@ -605,10 +621,12 @@ class QuickOrderController extends AppBaseController {
       body[RequestKeys.branchId] =
           homeController.currentUserData?.branchId.toString() ?? '0';
 
-      var res = await api.getProductData(body);
+      var res = await api.getProductData(body, withSerial: true);
       if (res.status == 200) {
         _allProducts = res.data ?? [];
         _applySearch(searchController.text);
+        WidgetsBinding.instance
+            .addPostFrameCallback((_) => _scrollProductsToTop());
       } else {
         _allProducts = [];
         productList = [];
@@ -626,6 +644,10 @@ class QuickOrderController extends AppBaseController {
   void searchProduct(String value) {
     _applySearch(value);
     update();
+
+    /// After the rebuild, so the list is measured against the new, shorter
+    /// set before being moved.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollProductsToTop());
   }
 
   void _applySearch(String value) {
@@ -634,17 +656,17 @@ class QuickOrderController extends AppBaseController {
       productList = List<ProductDataList>.from(_allProducts);
       return;
     }
-    /// Name, code and description. There is no serial-number field on
-    /// `itemlistwithbranch` — the response carries only itemid, itemname,
-    /// itemcode, itemdescription, unit and rate — so a serial typed here can
-    /// only match if it was recorded in the description. Add it to this list
-    /// the day the backend returns one.
+    /// Name, code, serial number and description. [sno] comes from the
+    /// `itemwithbranchandsno` endpoint and is blank on most items until the
+    /// serials are entered in the ERP, in which case it simply never matches.
     productList = _allProducts.where((e) {
       final name = (e.itemname ?? '').toLowerCase();
       final code = (e.itemcode ?? '').toLowerCase();
+      final serial = (e.sno ?? '').toLowerCase();
       final desc = (e.itemdescription ?? '').toLowerCase();
       return name.contains(query) ||
           code.contains(query) ||
+          serial.contains(query) ||
           desc.contains(query);
     }).toList();
   }
